@@ -3,22 +3,28 @@ from moving_polyfit.moving_ls import PolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 
-c = 0.5
-f = 500
+#TODO: Allow for sub-sampled outputs for more accurate plotting
+
+dt = 0.01  # sampling timestep
+num_steps = 1000
+mid_t = dt*num_steps/2.0
+f = 2.0*np.pi/dt
+mag = 10.0/(dt**2.0)
+verbose = False
 
 
 def phi(t, x):
-    if t <= 2.5:
+    if t <= mid_t:
         return 0.0  # 0.5*c*np.sum(x**2.0)  # phi(x) = x^Tx nonlinearity
     else:
-        return t*np.cos(f*t)  # t**3.0 - 2.5  # -3*c*np.sum(x**2.0)
+        return mag*np.sin(f*(t-mid_t))  # t**3.0 - 2.5  # -3*c*np.sum(x**2.0)
 
 
 def dphidt(t, x):
-    if t <= 2.5:
+    if t <= mid_t:
         return 0.0  # c*np.dot(x, rhs(t, x, None))
     else:
-        return -f*t*np.sin(f*t) + np.cos(f*t)  # 3.0*t**2.0  # 1.0  # -3*2*c*np.dot(x, rhs(t, x, None))
+        return f*mag*np.cos(f*(t-mid_t))  # 3.0*t**2.0  # 1.0  # -3*2*c*np.dot(x, rhs(t, x, None))
 
 
 def rhs(t, x, u):
@@ -44,7 +50,6 @@ def control_input(t, y):
 n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
-num_steps = 10000
 
 x = np.empty((n, num_steps))
 y = np.empty((p, num_steps))
@@ -53,15 +58,15 @@ time = np.zeros((num_steps,))
 np.random.seed(2)
 x0 = np.random.uniform(low=-1.0, high=1.0, size=n)  # generate a random initial state
 x[:, 0] = x0
-dt = 0.0005
 
 sys = ContinuousTimeSystem(2, rhs, h=output_fn, x0=x0, dt=dt)
 y[:, 0] = sys.y
 print("Initialized CT system object.")
 
 d = 4  # degree of estimation polynomial
-N = 1000  # number of samples
+N = 4  # number of samples
 estimator = PolyEstimator(d, N, dt)
+global_thetas = False
 theta = np.empty((d, num_steps-N))
 dphi_hat = np.empty((num_steps-N,))
 dphi = np.empty((num_steps-N,))
@@ -72,10 +77,15 @@ for t in range(1, num_steps):
     u[:, t-1] = control_input(sys.t, y[:, t-1])
     x[:, t], y[:, t] = sys.step(u[:, t-1])
     time[t] = sys.t
-    if t >= N:
-        theta[:, t-N] = estimator.fit(y[0, t-N:t])
-        for i in range(d):
-            yhat[i, t-N] = estimator.differentiate((N-1)*dt, i)
+    if t >= N-1:
+        if global_thetas:
+            theta[:, t-N] = estimator.fit_global(y[0, t-N+1:t+1], time[t-N+1])
+            for i in range(d):
+                yhat[i, t-N] = estimator.differentiate(time[t], i)
+        else:
+            theta[:, t-N] = estimator.fit(y[0, t-N+1:t+1])
+            for i in range(d):
+                yhat[i, t-N] = estimator.differentiate((N-1)*dt, i)
 
         for i in range(sys.n):
             ytrue[i, t-N] = x[i, t]
@@ -83,10 +93,11 @@ for t in range(1, num_steps):
         ytrue[sys.n+1, t-N] = dphidt(sys.t, x[:, t])
         dphi[t-N] = dphidt(sys.t, x[:, t])
 
-    print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
+    if verbose:
+        print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
 
 
-f = plt.figure(figsize=(10, 10))
+f = plt.figure(figsize=(12, 8))
 x0_plot = f.add_subplot((221))
 x1_plot = f.add_subplot((222))
 traj_plot = f.add_subplot((223))
