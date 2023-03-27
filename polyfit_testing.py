@@ -5,23 +5,23 @@ import matplotlib.pyplot as plt
 
 
 sampling_dt = 1.0  # sampling timestep
-integration_per_sample = 1000  # how many integration timesteps should we take between output samples?
+integration_per_sample = 500  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 30
+num_sampling_steps = 20
 num_integration_steps = num_sampling_steps*integration_per_sample
 
 mid_t = 0.0  # sampling_dt*num_sampling_steps/2.0
 f = np.pi/sampling_dt
 mag = 1.0
-verbose = True
+verbose = False
 
 
 def phi(t, x):
-    return mag*np.sin(f*(t-mid_t))
+    return mag*np.sin(f*t)
 
 
 def dphidt(t, x):
-    return f*mag*np.cos(f*(t-mid_t))
+    return f*mag*np.cos(f*t)
 
 
 def rhs(t, x, u):
@@ -48,9 +48,9 @@ m = 1  # control input dimension
 p = 1  # output dimension
 
 d = 4  # degree of estimation polynomial
-N = 4  # number of samples
+N = 10  # number of samples
 estimator = PolyEstimator(d, N, sampling_dt)
-global_thetas = True
+global_thetas = False
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
@@ -68,11 +68,11 @@ y_true = np.zeros((d, num_integration_steps))
 integration_time = np.zeros((num_integration_steps,))
 sampling_time = np.zeros((num_sampling_steps,))
 np.random.seed(2)
-x0 = np.zeros((2,))  # np.random.uniform(low=-1.0, high=1.0, size=n)  # generate a random initial state
+x0 = np.array([0.0, -mag/f])
 x[:, 0] = x0
 x_samples[:, 0] = x0
 
-sys = ContinuousTimeSystem(2, rhs, h=output_fn, x0=x0, dt=integration_dt, solver='Radau')
+sys = ContinuousTimeSystem(2, rhs, h=output_fn, x0=x0, dt=integration_dt, solver='RK45')
 y[:, 0] = sys.y
 y_samples[0, 0] = sys.y
 y_true[0, 0] = sys.y
@@ -136,29 +136,33 @@ x1_plot = f.add_subplot((222))
 traj_plot = f.add_subplot((223))
 u_plot = f.add_subplot((224))
 
-x0_plot.plot(integration_time, x[0, :], linewidth=2.0, c='blue')
-x0_plot.plot(sampling_time[N:], yhat[0, N:], linewidth=2.0, c='red', linestyle='dashed')
-x0_plot.scatter(sampling_time, y_samples[0, :], s=50, marker='x', c='blue')
+x0_plot.plot(integration_time, x[0, :], linewidth=2.0, c='blue', label='truth')
+x0_plot.plot(sampling_time[N:], yhat[0, N:], linewidth=2.0, c='red', linestyle='dashed', label='estimate')
+x0_plot.scatter(sampling_time, y_samples[0, :], s=50, marker='x', c='blue', label='samples')
 x0_plot.set_xlabel('time (s)')
-x0_plot.set_ylabel('x[0]')
+x0_plot.set_ylabel('x1(t)')
+x0_plot.legend(loc='upper right')
 x0_plot.grid()
 
-x1_plot.plot(integration_time, x[1, :], linewidth=2.0, c='blue')
-x1_plot.plot(sampling_time[N:], yhat[1, N:], linewidth=2.0, c='red', linestyle='dashed')
+x1_plot.plot(integration_time, x[1, :], linewidth=2.0, c='blue', label='truth')
+x1_plot.plot(sampling_time[N:], yhat[1, N:], linewidth=2.0, c='red', linestyle='dashed', label='estimate')
+x1_plot.scatter(sampling_time, y_samples[1, :], s=50, marker='x', c='blue', label='samples')
 x1_plot.set_xlabel('time (s)')
-x1_plot.set_ylabel('x[1]')
+x1_plot.set_ylabel('x2(t)')
+x1_plot.legend(loc='upper right')
 x1_plot.grid()
 
-traj_plot.plot(x[0, :], x[1, :], linewidth=2.0, c='blue')
-traj_plot.plot(yhat[0, N:], yhat[1, N:], linewidth=2.0, c='red', linestyle='dashed')
+traj_plot.plot(x[0, :], x[1, :], linewidth=2.0, c='blue', label='truth')
+traj_plot.plot(yhat[0, N:], yhat[1, N:], linewidth=2.0, c='red', linestyle='dashed', label='estimate')
 traj_plot.scatter(x[0, 0], x[1, 0], s=50, marker='*', c='blue')
 traj_plot.scatter(yhat[0, N], yhat[1, N], s=50, marker='*', c='red')
 traj_plot.scatter(x_samples[0, :], x_samples[1, :], s=50, marker='x', c='blue')
 marg = 0.1
 traj_plot.set_xlim(x[0, :].min()-marg, x[0, :].max()+marg)
 traj_plot.set_ylim(x[1, :].min()-marg, x[1, :].max()+marg)
-traj_plot.set_xlabel('x[0]')
-traj_plot.set_ylabel('x[1]')
+traj_plot.set_xlabel('x1')
+traj_plot.set_ylabel('x2')
+traj_plot.legend(loc='upper right')
 traj_plot.grid()
 
 u_plot.plot(sampling_time[1:], u[0, :], linewidth=2.0, c='red')
@@ -173,25 +177,27 @@ thetas_plot = f2.add_subplot(131)
 
 for i in range(d):
     thetas_plot.plot(sampling_time[N:], theta[i, N:], linewidth=2.0, label=f'Theta[{i}]')
-thetas_plot.legend()
+thetas_plot.set_ylim(-1, 1)
+thetas_plot.legend(loc='upper right')
 thetas_plot.grid()
 
 est_plot = f2.add_subplot(132)
 est_plot.plot(integration_time[N:], y_true[3, N:], linewidth=2.0, c='blue', label='truth')
 est_plot.plot(sampling_time[N:], yhat[3, N:], linewidth=2.0, c='red', label='estimate')
-est_plot.legend()
+est_plot.set_ylabel('d/dt phi(t)')
+est_plot.legend(loc='upper right')
 est_plot.grid()
 
 yhat_plot = f2.add_subplot(133)
 colors = ['red', 'blue', 'green', 'orange', 'pink']
 for i in range(d):
     kwargs = {
-        'label': f'{i}th derivative',
+        'label': f'{i}th derivative error',
         'linewidth': 2.0,
         'color': colors[i]
     }
     yhat_plot.plot(sampling_time[N:], np.abs(yhat[i, N:]-y_samples[i, N:]), **kwargs)
-yhat_plot.legend()
+yhat_plot.legend(loc='upper right')
 yhat_plot.grid()
 yhat_plot.set_title('Output signal estimation errors')
 
