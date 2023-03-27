@@ -22,7 +22,7 @@ class ContinuousTimeSystem:
     x0 - initial state of system
 
     '''
-    def __init__(self, n, rhs, h=None, x0=None, u0=None, t=0.0, dt=1e-6):
+    def __init__(self, n, rhs, h=None, x0=None, u0=None, t=0.0, dt=1e-6, solver='RK45'):
 
         self.n = n
         self.t = t
@@ -41,12 +41,14 @@ class ContinuousTimeSystem:
         self.u = u0
         self.y = self.output(self.t, self.x, self.u)
 
+        self.solver = solver
+
     def step(self, u):
         # parameterize the ODE right hand side (using a def for cleanliness)
         def f(t, x):
             return self.rhs(t, x, u)
         self.u = u
-        sol = solve_ivp(f, (self.t, self.t+self.dt), self.x)  # numerically integrate for self.dt seconds
+        sol = solve_ivp(f, (self.t, self.t+self.dt), self.x, method=self.solver)  # numerically integrate for self.dt
         self.t += self.dt  # step forward the time variable
         self.x = sol.y[:, -1]  # save the new system state
         self.y = self.output(self.t, self.x, u)
