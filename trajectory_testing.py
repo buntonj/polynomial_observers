@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-sampling_dt = 0.1  # sampling timestep
+sampling_dt = 0.05  # sampling timestep
 integration_per_sample = 100  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 100
@@ -17,11 +17,11 @@ verbose = False
 
 
 def phi(t, x):
-    return -1.0  # mag*np.sin(f*t)
+    return -x[0]**3.0# -1.0  # mag*np.sin(f*t)
 
 
 def dphidt(t, x):
-    return 0.0  # f*mag*np.cos(f*t)
+    return -3.0*x[0]**2.0  # f*mag*np.cos(f*t)
 
 
 def rhs(t, x, u):
@@ -31,7 +31,7 @@ def rhs(t, x, u):
     dx[n]/dt = phi(x)
     '''
     rhs = np.roll(x, -1)
-    rhs[-1] = phi(t, x)
+    rhs[-1] = u
     return rhs
 
 
@@ -40,7 +40,7 @@ def output_fn(t, x, u):
 
 
 def control_input(t, y):
-    return 0.0
+    return -y[0]**3.0
 
 
 def generate_simulated_trajectories(sys, num, N, dt):
@@ -48,11 +48,11 @@ def generate_simulated_trajectories(sys, num, N, dt):
     for i in range(num):
         x = np.empty((sys.n, N))
         y = np.empty((sys.p, N))
-        x0 = 50.0*(np.random.rand(sys.n) - 0.5)
+        x0 = 5.0*(np.random.rand(sys.n) - 0.5)
         x[:, 0], y[:, 0] = sys.reset(x0, u0=None, t=0.0)
-        u = 10*(np.random.rand()-0.5)
+        # u = 10*(np.random.rand()-0.5)
         for t in range(N):
-            # u = 10*(np.random.rand()-0.5)  # control_input(t*dt, y[:, 0])
+            u = control_input(t*dt, y[:, 0])
             x[:, t], y[:, t] = sys.step(u, dt=dt)
         trajectories.append((x, y))
     return trajectories
@@ -67,7 +67,7 @@ N = 20  # number of samples
 poly_estimator = PolyEstimator(d, N, sampling_dt)
 global_thetas = False
 
-num_trajectories = d
+num_trajectories = 3
 sim_sys = ContinuousTimeSystem(2, rhs, h=output_fn, dt=integration_dt, solver='RK45')
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 traj_estimator = TrajectoryEstimator(trajectories)
@@ -171,7 +171,7 @@ u_plot = f.add_subplot((224))
 x0_plot.plot(integration_time, x[0, :], linewidth=2.0, c='blue', label='truth')
 x0_plot.plot(sampling_time[N:], yhat_poly[0, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
 x0_plot.plot(sampling_time[N:], yhat_traj[0, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
-x0_plot.scatter(sampling_time, y_samples[0, :], s=50, marker='x', c='blue', label='samples')
+x0_plot.scatter(sampling_time, y_samples[0, :], s=20, marker='x', c='blue', label='samples')
 x0_plot.set_xlabel('time (s)')
 x0_plot.set_ylabel('x1(t)')
 x0_plot.legend(loc='upper right')
@@ -191,7 +191,7 @@ traj_plot.plot(yhat_poly[0, N:], yhat_poly[1, N:], linewidth=2.0, c='red', lines
 traj_plot.plot(yhat_traj[0, N:], yhat_traj[1, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
 traj_plot.scatter(x[0, 0], x[1, 0], s=50, marker='*', c='blue')
 traj_plot.scatter(yhat_poly[0, N], yhat_poly[1, N], s=50, marker='*', c='red')
-traj_plot.scatter(x_samples[0, :], x_samples[1, :], s=50, marker='x', c='blue')
+traj_plot.scatter(x_samples[0, :], x_samples[1, :], s=20, marker='x', c='blue')
 marg = 0.1
 traj_plot.set_xlim(x[0, :].min()-marg, x[0, :].max()+marg)
 traj_plot.set_ylim(x[1, :].min()-marg, x[1, :].max()+marg)
@@ -208,40 +208,37 @@ u_plot.grid()
 f.tight_layout()
 
 f2 = plt.figure(figsize=(15, 6))
-thetas_plot = f2.add_subplot(131)
+thetas_plot = f2.add_subplot(121)
 
 for i in range(d):
-    thetas_plot.plot(sampling_time[N:], theta_poly[i, N:], linewidth=2.0, label=f'Theta[{i}]')
-thetas_plot.set_ylim(-1, 1)
+    thetas_plot.plot(sampling_time[N:], theta_poly[i, N:], linewidth=2.0, label=f'Theta[{i}], poly')
+for i in range(n):
+    thetas_plot.plot(sampling_time[N:], theta_traj[i, N:], linewidth=2.0, linestyle='dashed', label=f'Theta[{i}], traj')
+thetas_plot.set_ylim(min(np.amin(theta_poly[:, N:]), np.amin(theta_traj[:, N:])),
+                     max(np.amax(theta_traj[:, N:]), np.amax(theta_poly[:, N:])))
 thetas_plot.legend(loc='upper right')
 thetas_plot.grid()
 
-est_plot = f2.add_subplot(132)
-est_plot.plot(integration_time[N:], y_true[3, N:], linewidth=2.0, c='blue', label='truth')
-est_plot.plot(sampling_time[N:], yhat_poly[3, N:], linewidth=2.0, c='red', label='estimate')
-est_plot.set_ylabel('d/dt phi(t)')
-est_plot.legend(loc='upper right')
-est_plot.grid()
-
-yhat_plot = f2.add_subplot(133)
+yhat_plot = f2.add_subplot(122)
 colors = ['red', 'blue', 'green', 'orange', 'pink']
-for i in range(d):
+for i in range(n):
     kwargs = {
         'label': f'{i}th derivative error',
         'linewidth': 2.0,
         'color': colors[i]
     }
     yhat_plot.plot(sampling_time[N:], np.abs(yhat_poly[i, N:]-y_samples[i, N:]), **kwargs)
-    if i < n:
-        kwargs = {
-            'label': f'{i}th derivative error, traj',
-            'linewidth': 2.0,
-            'color': colors[i],
-            'linestyle': 'dashed'
-        }
-        yhat_plot.plot(sampling_time[N:], np.abs(yhat_traj[i, N:]-y_samples[i, N:]), **kwargs)
+    kwargs = {
+        'label': f'x[{i}] error, traj',
+        'linewidth': 2.0,
+        'color': colors[i],
+        'linestyle': 'dashed'
+    }
+    yhat_plot.plot(sampling_time[N:], np.abs(yhat_traj[i, N:]-y_samples[i, N:]), **kwargs)
 yhat_plot.legend(loc='upper right')
 yhat_plot.grid()
+yhat_plot.set_xlabel('time')
+yhat_plot.set_ylabel('error')
 yhat_plot.set_title('Output signal estimation errors')
 
 f2.tight_layout()
@@ -250,8 +247,13 @@ f3 = plt.figure(figsize=(12, 6))
 sample_x_plot = f3.add_subplot(121)
 sample_y_plot = f3.add_subplot(122)
 for i, trajectory in enumerate(trajectories):
-    sample_x_plot.plot(trajectory[0][0, :], trajectory[0][1, :], linewidth=2.0, label=f'sample {i}')
-    sample_y_plot.plot(sampling_time[:N], trajectory[1][0, :], linewidth=2.0, label=f'sample {i}')
+    c = colors[i]
+    sample_x_plot.scatter(trajectory[0][0, 0], trajectory[0][1, 0], marker='*', s=50, color=c)
+    sample_x_plot.plot(trajectory[0][0, :], trajectory[0][1, :], linewidth=2.0, linestyle='dashed',
+                       label=f'traj sample {i}', color=c)
+    sample_y_plot.plot(sampling_time[:N], trajectory[1][0, :], linewidth=2.0, linestyle='dashed',
+                       label=f'traj sample {i}', color=c)
+    sample_y_plot.plot(sampling_time[:N], sampling_time[:N]**float(i), linewidth=2.0, label=f'poly sample {i}', color=c)
 sample_x_plot.grid()
 sample_y_plot.grid()
 sample_x_plot.legend(loc='upper right')
