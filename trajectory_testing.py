@@ -4,10 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-sampling_dt = 1.0  # sampling timestep
-integration_per_sample = 500  # how many integration timesteps should we take between output samples?
+sampling_dt = 0.1  # sampling timestep
+integration_per_sample = 100  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 20
+num_sampling_steps = 100
 num_integration_steps = num_sampling_steps*integration_per_sample
 
 mid_t = 0.0  # sampling_dt*num_sampling_steps/2.0
@@ -48,10 +48,11 @@ def generate_simulated_trajectories(sys, num, N, dt):
     for i in range(num):
         x = np.empty((sys.n, N))
         y = np.empty((sys.p, N))
-        x0 = 2.0*(np.random.rand(sys.n) - 0.5)
+        x0 = 50.0*(np.random.rand(sys.n) - 0.5)
         x[:, 0], y[:, 0] = sys.reset(x0, u0=None, t=0.0)
+        u = 10*(np.random.rand()-0.5)
         for t in range(N):
-            u = control_input(t*dt, y[:, 0])
+            # u = 10*(np.random.rand()-0.5)  # control_input(t*dt, y[:, 0])
             x[:, t], y[:, t] = sys.step(u, dt=dt)
         trajectories.append((x, y))
     return trajectories
@@ -62,7 +63,7 @@ m = 1  # control input dimension
 p = 1  # output dimension
 
 d = 4  # degree of estimation polynomial
-N = 10  # number of samples
+N = 20  # number of samples
 poly_estimator = PolyEstimator(d, N, sampling_dt)
 global_thetas = False
 
