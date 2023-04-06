@@ -1,14 +1,16 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
+from nonlinear_system.sample_odes import integrator_rhs, lorenz_rhs, tora_rhs
+from nonlinear_system.sample_odes import integrator_output_inv, lorenz_output_inv
 from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-sampling_dt = 0.05  # sampling timestep
+np.random.seed(2)
+sampling_dt = 0.01  # sampling timestep
 integration_per_sample = 100  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 100
-num_integration_steps = num_sampling_steps*integration_per_sample
+num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 
 mid_t = 0.0  # sampling_dt*num_sampling_steps/2.0
 f = np.pi/sampling_dt
@@ -16,30 +18,12 @@ mag = 1.0
 verbose = False
 
 
-def phi(t, x):
-    return -x[0]**3.0# -1.0  # mag*np.sin(f*t)
-
-
-def dphidt(t, x):
-    return -3.0*x[0]**2.0  # f*mag*np.cos(f*t)
-
-
-def rhs(t, x, u):
-    '''
-    RHS for n-dimensional integrator ODE
-    dx[i]/dt = x[i+1]
-    dx[n]/dt = phi(x)
-    '''
-    rhs = np.roll(x, -1)
-    rhs[-1] = u
-    return rhs
-
-
 def output_fn(t, x, u):
     return x[0]
 
 
 def control_input(t, y):
+    # return 0.0
     return -y[0]**3.0
 
 
@@ -48,9 +32,8 @@ def generate_simulated_trajectories(sys, num, N, dt):
     for i in range(num):
         x = np.empty((sys.n, N))
         y = np.empty((sys.p, N))
-        x0 = 5.0*(np.random.rand(sys.n) - 0.5)
+        x0 = 50.0*(np.random.rand(sys.n) - 0.5)
         x[:, 0], y[:, 0] = sys.reset(x0, u0=None, t=0.0)
-        # u = 10*(np.random.rand()-0.5)
         for t in range(N):
             u = control_input(t*dt, y[:, 0])
             x[:, t], y[:, t] = sys.step(u, dt=dt)
@@ -58,7 +41,9 @@ def generate_simulated_trajectories(sys, num, N, dt):
     return trajectories
 
 
-n = 2  # system state dimension
+ODE_RHS = lorenz_rhs
+OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u)
+n = 3  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
 
@@ -67,40 +52,35 @@ N = 20  # number of samples
 poly_estimator = PolyEstimator(d, N, sampling_dt)
 global_thetas = False
 
-num_trajectories = 3
-sim_sys = ContinuousTimeSystem(2, rhs, h=output_fn, dt=integration_dt, solver='RK45')
+num_trajectories = 5
+sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solver='RK45')
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
+print('GENERATED TRAJECTORIES.')
 traj_estimator = TrajectoryEstimator(trajectories)
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
 
-y_samples = np.empty((d, num_sampling_steps))
+y_samples = np.empty((p, num_sampling_steps))
 x_samples = np.empty((n, num_sampling_steps))
 u = np.empty((m, num_sampling_steps-1))
 
 theta_poly = np.empty((d, num_sampling_steps))
 theta_traj = np.empty((num_trajectories, num_sampling_steps))
-dphi_hat = np.empty((num_sampling_steps,))
 yhat_poly = np.empty((d, num_sampling_steps))
-yhat_traj = np.empty((n, num_sampling_steps))
-
-y_true = np.zeros((d, num_integration_steps))
+xhat_poly = np.empty((n, num_sampling_steps))
+xhat_traj = np.empty((n, num_sampling_steps))
 
 integration_time = np.zeros((num_integration_steps,))
 sampling_time = np.zeros((num_sampling_steps,))
-np.random.seed(2)
-x0 = np.array([0.0, -mag/f])
+x0 = 50.0*(np.random.rand(n)-0.5)
 x[:, 0] = x0
 x_samples[:, 0] = x0
-sys = ContinuousTimeSystem(2, rhs, h=output_fn, x0=x0, dt=integration_dt, solver='RK45')
+sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, x0=x0, dt=integration_dt, solver='RK45')
 y[:, 0] = sys.y
 y_samples[0, 0] = sys.y
-y_true[0, 0] = sys.y
 
-print("Initialized CT system object.")
-
-print('ESTIMATION PROPERTIES:')
+print('ESTIMATOR PROPERTIES:')
 print(f'Polyfit condition number: {np.linalg.cond(poly_estimator.F)}')
 print(f'Traject condition number: {np.linalg.cond(traj_estimator.data_matrix)}')
 
@@ -108,28 +88,16 @@ print(f'Traject condition number: {np.linalg.cond(traj_estimator.data_matrix)}')
 for t in range(1, num_sampling_steps):
     # select the control input
     u[:, t-1] = control_input(sys.t, y[:, t-1])
-
     # integrate forward in time
     for i in range(integration_per_sample):
         # compute the right "in between" index
-        idx = t*integration_per_sample + i
+        idx = (t-1)*integration_per_sample + i
         x[:, idx], y[:, idx] = sys.step(u[:, t-1])
         integration_time[idx] = sys.t
-
-    # extract real values of output and its derivatives
-        for j in range(sys.n):
-            y_true[j, idx] = x[j, idx]
-        y_true[sys.n, idx] = phi(sys.t, x[:, idx])
-        y_true[sys.n+1, idx] = dphidt(sys.t, x[:, idx])
 
     # sample the system
     sampling_time[t] = sys.t
     y_samples[0, t], x_samples[:, t] = sys.y, sys.x
-
-    for i in range(sys.n):
-        y_samples[i, t] = x_samples[i, t]
-    y_samples[sys.n, t] = phi(sys.t, x_samples[:, t])
-    y_samples[sys.n+1, t] = dphidt(sys.t, x_samples[:, t])
 
     if t >= N-1:
         # POLYNOMIAL FITTING
@@ -147,16 +115,17 @@ for t in range(1, num_sampling_steps):
             # estimate with polynomial derivatives at endpoint
             for i in range(d):
                 yhat_poly[i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
+        xhat_poly[:, t] = OUTPUT_INV(sys.t, yhat_poly[:, t], u[:, t-1])
 
         # TRAJECTORY FITTING
         theta_traj[:, t] = traj_estimator.fit(y_samples[0, t-N+1:t+1])
-        yhat_traj[:, t] = traj_estimator.estimate()
+        xhat_traj[:, t] = traj_estimator.estimate()
 
     else:
         theta_poly[:, t] = 0.0
         theta_traj[:, t] = 0.0
         yhat_poly[:, t] = 0.0
-        yhat_traj[:, t] = 0.0
+        xhat_traj[:, t] = 0.0
 
     if verbose:
         print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
@@ -169,42 +138,42 @@ traj_plot = f.add_subplot((223))
 u_plot = f.add_subplot((224))
 
 x0_plot.plot(integration_time, x[0, :], linewidth=2.0, c='blue', label='truth')
-x0_plot.plot(sampling_time[N:], yhat_poly[0, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
-x0_plot.plot(sampling_time[N:], yhat_traj[0, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
-x0_plot.scatter(sampling_time, y_samples[0, :], s=20, marker='x', c='blue', label='samples')
+x0_plot.plot(sampling_time[N:], xhat_poly[0, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+x0_plot.plot(sampling_time[N:], xhat_traj[0, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
+x0_plot.scatter(sampling_time, x_samples[0, :], s=20, marker='x', c='blue', label='samples')
 x0_plot.set_xlabel('time (s)')
 x0_plot.set_ylabel('x1(t)')
-x0_plot.legend(loc='upper right')
+x0_plot.legend()
 x0_plot.grid()
 
 x1_plot.plot(integration_time, x[1, :], linewidth=2.0, c='blue', label='truth')
-x1_plot.plot(sampling_time[N:], yhat_poly[1, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
-x1_plot.plot(sampling_time[N:], yhat_traj[1, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
-x1_plot.scatter(sampling_time, y_samples[1, :], s=50, marker='x', c='blue', label='samples')
+x1_plot.plot(sampling_time[N:], xhat_poly[1, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+x1_plot.plot(sampling_time[N:], xhat_traj[1, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
+x1_plot.scatter(sampling_time, x_samples[1, :], s=50, marker='x', c='blue', label='samples')
 x1_plot.set_xlabel('time (s)')
 x1_plot.set_ylabel('x2(t)')
-x1_plot.legend(loc='upper right')
+x1_plot.legend()
 x1_plot.grid()
 
 traj_plot.plot(x[0, :], x[1, :], linewidth=2.0, c='blue', label='truth')
-traj_plot.plot(yhat_poly[0, N:], yhat_poly[1, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
-traj_plot.plot(yhat_traj[0, N:], yhat_traj[1, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
-traj_plot.scatter(x[0, 0], x[1, 0], s=50, marker='*', c='blue')
-traj_plot.scatter(yhat_poly[0, N], yhat_poly[1, N], s=50, marker='*', c='red')
+traj_plot.plot(xhat_poly[0, N:], xhat_poly[1, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+traj_plot.plot(xhat_traj[0, N:], xhat_traj[1, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
+traj_plot.scatter(x[0, 0], x[1, 0], s=75, marker='*', c='blue')
+traj_plot.scatter(xhat_poly[0, N], xhat_poly[1, N], s=20, marker='*', c='red')
 traj_plot.scatter(x_samples[0, :], x_samples[1, :], s=20, marker='x', c='blue')
 marg = 0.1
 traj_plot.set_xlim(x[0, :].min()-marg, x[0, :].max()+marg)
 traj_plot.set_ylim(x[1, :].min()-marg, x[1, :].max()+marg)
 traj_plot.set_xlabel('x1')
 traj_plot.set_ylabel('x2')
-traj_plot.legend(loc='upper right')
+traj_plot.legend()
 traj_plot.grid()
 
 u_plot.plot(sampling_time[1:], u[0, :], linewidth=2.0, c='red')
 u_plot.set_xlabel('time (s)')
 u_plot.set_ylabel('u')
 u_plot.grid()
-
+u_plot.set_title('Input over time')
 f.tight_layout()
 
 f2 = plt.figure(figsize=(15, 6))
@@ -216,53 +185,66 @@ for i in range(n):
     thetas_plot.plot(sampling_time[N:], theta_traj[i, N:], linewidth=2.0, linestyle='dashed', label=f'Theta[{i}], traj')
 thetas_plot.set_ylim(min(np.amin(theta_poly[:, N:]), np.amin(theta_traj[:, N:])),
                      max(np.amax(theta_traj[:, N:]), np.amax(theta_poly[:, N:])))
-thetas_plot.legend(loc='upper right')
+thetas_plot.legend()
+thetas_plot.set_title('Parameters over time')
 thetas_plot.grid()
 
 yhat_plot = f2.add_subplot(122)
-colors = ['red', 'blue', 'green', 'orange', 'pink']
+colors = ['red', 'blue', 'green', 'orange', 'pink', 'deeppink', 'violet', 'lime', 'gray', 'black']
 for i in range(n):
     kwargs = {
-        'label': f'{i}th derivative error',
+        'label': f'x[{i}] error, poly',
         'linewidth': 2.0,
         'color': colors[i]
     }
-    yhat_plot.plot(sampling_time[N:], np.abs(yhat_poly[i, N:]-y_samples[i, N:]), **kwargs)
+    yhat_plot.plot(sampling_time[N:], np.abs(xhat_poly[i, N:]-x_samples[i, N:]), **kwargs)
     kwargs = {
         'label': f'x[{i}] error, traj',
         'linewidth': 2.0,
         'color': colors[i],
         'linestyle': 'dashed'
     }
-    yhat_plot.plot(sampling_time[N:], np.abs(yhat_traj[i, N:]-y_samples[i, N:]), **kwargs)
-yhat_plot.legend(loc='upper right')
+    yhat_plot.plot(sampling_time[N:], np.abs(xhat_traj[i, N:]-x_samples[i, N:]), **kwargs)
+yhat_plot.legend()
 yhat_plot.grid()
 yhat_plot.set_xlabel('time')
 yhat_plot.set_ylabel('error')
-yhat_plot.set_title('Output signal estimation errors')
-
+yhat_plot.set_title('State estimation errors')
 f2.tight_layout()
 
 f3 = plt.figure(figsize=(12, 6))
 sample_x_plot = f3.add_subplot(121)
 sample_y_plot = f3.add_subplot(122)
 for i, trajectory in enumerate(trajectories):
-    c = colors[i]
+    c = colors[i % len(colors)]
     sample_x_plot.scatter(trajectory[0][0, 0], trajectory[0][1, 0], marker='*', s=50, color=c)
     sample_x_plot.plot(trajectory[0][0, :], trajectory[0][1, :], linewidth=2.0, linestyle='dashed',
                        label=f'traj sample {i}', color=c)
     sample_y_plot.plot(sampling_time[:N], trajectory[1][0, :], linewidth=2.0, linestyle='dashed',
                        label=f'traj sample {i}', color=c)
+for i in range(d):
+    c = colors[i % len(colors)]
     sample_y_plot.plot(sampling_time[:N], sampling_time[:N]**float(i), linewidth=2.0, label=f'poly sample {i}', color=c)
 sample_x_plot.grid()
 sample_y_plot.grid()
-sample_x_plot.legend(loc='upper right')
-sample_y_plot.legend(loc='upper right')
 sample_x_plot.set_title('Trajectory Samples')
 sample_x_plot.set_xlabel('x[0]')
 sample_x_plot.set_ylabel('x[1]')
 sample_y_plot.set_xlabel('t')
 sample_y_plot.set_ylabel('y(t)')
 sample_y_plot.set_title('Output samples')
+f3.tight_layout()
+
+f4, axs = plt.subplots(nrows=n//4+1, ncols=min(4, n), figsize=(5*min(4, n), 5))
+for i, ax in enumerate(axs.ravel()):
+    ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
+    ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+    ax.plot(sampling_time[N:], xhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
+    ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
+    ax.set_xlabel('time (s)')
+    ax.set_ylabel(f'x[{i}](t)')
+    ax.legend()
+    ax.grid()
+f4.tight_layout()
 
 plt.show()
