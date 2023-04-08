@@ -47,12 +47,12 @@ n = 3  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
 
-d = 4  # degree of estimation polynomial
-N = 20  # number of samples
+d = 6  # degree of estimation polynomial
+N = 10  # number of samples
 poly_estimator = PolyEstimator(d, N, sampling_dt)
 global_thetas = False
 
-num_trajectories = 5
+num_trajectories = 6
 sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solver='RK45')
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 print('GENERATED TRAJECTORIES.')
@@ -83,6 +83,8 @@ y_samples[0, 0] = sys.y
 print('ESTIMATOR PROPERTIES:')
 print(f'Polyfit condition number: {np.linalg.cond(poly_estimator.F)}')
 print(f'Traject condition number: {np.linalg.cond(traj_estimator.data_matrix)}')
+_, s, _ = np.linalg.svd(traj_estimator.data_matrix)
+print('Singular values', s)
 
 
 for t in range(1, num_sampling_steps):
