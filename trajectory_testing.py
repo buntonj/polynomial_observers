@@ -9,7 +9,7 @@ np.random.seed(2)
 sampling_dt = 0.01  # sampling timestep
 integration_per_sample = 100  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 100  # total number of steps taken in the
+num_sampling_steps = 500  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 
 mid_t = 0.0  # sampling_dt*num_sampling_steps/2.0
@@ -50,6 +50,7 @@ p = 1  # output dimension
 d = 6  # degree of estimation polynomial
 N = 10  # number of samples
 poly_estimator = PolyEstimator(d, N, sampling_dt)
+residual_poly = PolyEstimator(d, d, sampling_dt)
 global_thetas = False
 
 num_trajectories = 6
@@ -60,6 +61,7 @@ traj_estimator = TrajectoryEstimator(trajectories)
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
+residual = np.empty((d, num_integration_steps))
 
 y_samples = np.empty((p, num_sampling_steps))
 x_samples = np.empty((n, num_sampling_steps))
@@ -95,6 +97,8 @@ for t in range(1, num_sampling_steps):
         idx = (t-1)*integration_per_sample + i
         x[:, idx], y[:, idx] = sys.step(u[:, t-1])
         integration_time[idx] = sys.t
+        if t > N-1:
+            residual[:, idx] = y[:, idx] - residual_poly.estimate(sys.t)
 
     # sample the system
     sampling_time[t] = sys.t
@@ -117,6 +121,7 @@ for t in range(1, num_sampling_steps):
             for i in range(d+1):
                 yhat_poly[i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
         xhat_poly[:, t] = OUTPUT_INV(sys.t, yhat_poly[:, t], u[:, t-1])
+        residual_poly.fit(y_samples[0, t-N+1:t-N+d+1]-yhat_poly[0, t-N+1:t-N+d+1])
 
         # TRAJECTORY FITTING
         theta_traj[:, t] = traj_estimator.fit(y_samples[0, t-N+1:t+1])
@@ -127,6 +132,7 @@ for t in range(1, num_sampling_steps):
         theta_traj[:, t] = 0.0
         yhat_poly[:, t] = 0.0
         xhat_traj[:, t] = 0.0
+        residual[:, t] = 0.0
 
     if verbose:
         print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
