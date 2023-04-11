@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.polynomial import Polynomial as P
 
 
 class PolyEstimator:
@@ -9,40 +10,27 @@ class PolyEstimator:
         self.d = d
         self.N = N
         self.dt = dt
-        self.regression_matrix = self.compute_matrix()
 
-    def compute_matrix(self, t0=0.0):
-        self.F = np.vander(np.linspace(t0, t0 + self.N*self.dt, self.N, endpoint=False), self.d, increasing=True)
-        return np.linalg.pinv(self.F)
-
-    def fit_global(self, y, t0):
-        regression_matrix = self.compute_matrix(t0=t0)
-        self.theta = regression_matrix @ y
-        return self.theta
-
-    def fit(self, y):
+    def fit(self, y, t0=0.0):
         '''
-        input: y, an np.array of shape (N,) (i.e. scalar outputs)
-        output: theta, degree-d polynomial coefficients
+        Convenience fitting function wrapper.
+        If t0 is not provided, does the fitting in ``local coordinates''
+        i.e., treats the first index as a sample from t0=0.0.
         '''
-        self.theta = self.regression_matrix @ y
-        return self.theta
+        self.polynomial = P.fit(np.linspace(t0, t0+self.N*self.dt, self.N, endpoint=False), y, self.d)
+        return self.polynomial.coef
 
     def estimate(self, t):
         '''
         input: t - a time to evaluate the current polyfit
         output: the current polynomial fit
         '''
-        eval = 0.0
-        for i in range(self.d):
-            eval += self.theta[i]*t**float(i)
+        eval = self.polynomial(t)
         return eval
 
     def differentiate(self, t, q):
-        # q-th derivative of interpolant
-        eval = 0.0
-        for i in range(self.d-q):
-            eval += self.theta[i+q]*(t**float(i))*np.prod(np.arange(i+q, i, -1))
+        # q-th derivative of polynomial fit
+        eval = self.polynomial.deriv(q)(t)
         return eval
 
 
