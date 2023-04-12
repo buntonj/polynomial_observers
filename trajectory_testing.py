@@ -6,7 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 np.random.seed(2)
-sampling_dt = 0.001  # sampling timestep
+N = 10  # number of samples in a window
+window_length = 0.01  # number of seconds of trajectory in a single window of data
+sampling_dt = window_length/float(N)  # computed sampling timestep
 integration_per_sample = 100  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 500  # total number of steps taken in the
@@ -47,7 +49,6 @@ m = 1  # control input dimension
 p = 1  # output dimension
 
 d = 5  # degree of estimation polynomial
-N = 10  # number of samples
 poly_estimator = PolyEstimator(d, N, sampling_dt)
 residual_poly = PolyEstimator(d, d, sampling_dt)
 global_thetas = False
