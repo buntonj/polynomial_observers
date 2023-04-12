@@ -42,15 +42,16 @@ def generate_simulated_trajectories(sys, num, N, dt):
     return trajectories
 
 
-ODE_RHS = lorenz_rhs
-OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u)
+sigma = 0.1
+ODE_RHS = lambda t, x, u: lorenz_rhs(t, x, u, sigma=0.1)
+OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u, sigma=0.1)
 n = 3  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
 
 d = 5  # degree of estimation polynomial
 poly_estimator = PolyEstimator(d, N, sampling_dt)
-residual_poly = PolyEstimator(d, d, sampling_dt)
+# residual_poly = PolyEstimator(d, d, sampling_dt)
 global_thetas = False
 
 num_trajectories = 6
@@ -58,6 +59,15 @@ sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solve
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 print('GENERATED TRAJECTORIES.')
 traj_estimator = TrajectoryEstimator(trajectories)
+state_fit = TrajectoryEstimator(trajectories)
+print('REGRESSION MATRICES:')
+print(f'Output: {traj_estimator.regression_matrix}')
+#print(f'State: {traj_estimator.state_regression_matrix}')
+C_matrix = np.zeros((N, n*N))
+for i in range(N):
+    C_matrix[i, i*n] = 1.0
+print(f'Cphi: {np.linalg.pinv(C_matrix @ traj_estimator.state_data_matrix)}')
+print(f'C+C: {np.linalg.pinv(C_matrix) @ C_matrix}')
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
@@ -69,6 +79,7 @@ u = np.empty((m, num_sampling_steps-1))
 
 theta_poly = np.empty((d+1, num_sampling_steps))
 theta_traj = np.empty((num_trajectories, num_sampling_steps))
+theta_state_traj = np.empty((num_trajectories, num_sampling_steps))
 yhat_poly = np.empty((d+1, num_sampling_steps))
 xhat_poly = np.empty((n, num_sampling_steps))
 xhat_traj = np.empty((n, num_sampling_steps))
@@ -97,7 +108,7 @@ for t in range(1, num_sampling_steps):
         idx = (t-1)*integration_per_sample + i
         x[:, idx], y[:, idx] = sys.step(u[:, t-1])
         integration_time[idx] = sys.t
-        #if t > N-1:
+        # if t > N-1:
         #    residual[:, idx] = y[:, idx] - residual_poly.estimate(sys.t)
 
     # sample the system
@@ -125,9 +136,11 @@ for t in range(1, num_sampling_steps):
 
         # TRAJECTORY FITTING
         theta_traj[:, t] = traj_estimator.fit(y_samples[0, t-N+1:t+1])
+        theta_state_traj[:, t] = state_fit.fit_state(x_samples[:, t-N+1:t+1])
         xhat_traj[:, t] = traj_estimator.estimate()
 
     else:
+        theta_state_traj[:, t] = 0.0
         theta_poly[:, t] = 0.0
         theta_traj[:, t] = 0.0
         yhat_poly[:, t] = 0.0
@@ -136,6 +149,7 @@ for t in range(1, num_sampling_steps):
 
     if verbose:
         print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
+        print(f'Difference: {theta_state_traj[:,t]-theta_traj[:,t]}')
 
 
 f = plt.figure(figsize=(12, 8))

@@ -42,21 +42,27 @@ class TrajectoryEstimator:
         '''
         args:
             trajectories (list): list of tuples of numpy arrays, (x, y)
-                x (np array, shape (n, num_samples))
-                y (np array, shape (p, num_samples))
+                x (np array, shape (n, num_steps))
+                y (np array, shape (p, num_steps))
         '''
         self.num_trajectories = len(trajectories)
-        self.num_samples = trajectories[0][0].shape[1]  # number of time steps in each simulation
+        self.num_steps = trajectories[0][0].shape[1]  # number of time steps in each simulation
         self.n = trajectories[0][0].shape[0]  # state dimension
         self.p = trajectories[0][1].shape[0]  # output dimension
 
-        self.data_matrix = np.empty((self.num_samples, self.p*self.num_trajectories))
+        self.data_matrix = np.empty((self.num_steps*self.p, self.num_trajectories))
+        self.state_data_matrix = np.empty((self.num_steps*self.n, self.num_trajectories))
         self.prediction_matrix = np.empty((self.n, self.num_trajectories))
 
         for i, trajectory in enumerate(trajectories):
-            self.data_matrix[:, i] = trajectory[1].flatten(order='C')
+            self.data_matrix[:, i] = trajectory[1].flatten(order='F')
+            self.state_data_matrix[:, i] = trajectory[0].flatten(order='F')
             self.prediction_matrix[:, i] = trajectory[0][:, -1]
         self.compute_matrix()
+        self.compute_state_matrix()
+
+    def compute_state_matrix(self):
+        self.state_regression_matrix = np.linalg.pinv(self.state_data_matrix)
 
     def compute_matrix(self):
         self.regression_matrix = np.linalg.pinv(self.data_matrix)
@@ -64,6 +70,10 @@ class TrajectoryEstimator:
     def fit(self, y):
         self.theta = self.regression_matrix @ y
         return self.theta
+
+    def fit_state(self, x):
+        self.theta_state = self.state_regression_matrix @ x.flatten(order='F')
+        return self.theta_state
 
     def estimate(self):
         return self.prediction_matrix @ self.theta
