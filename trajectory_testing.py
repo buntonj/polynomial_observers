@@ -60,14 +60,14 @@ trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sam
 print('GENERATED TRAJECTORIES.')
 traj_estimator = TrajectoryEstimator(trajectories)
 state_fit = TrajectoryEstimator(trajectories)
-print('REGRESSION MATRICES:')
-print(f'Output: {traj_estimator.regression_matrix}')
-#print(f'State: {traj_estimator.state_regression_matrix}')
+# print('REGRESSION MATRICES:')
+# print(f'Output: {traj_estimator.regression_matrix}')
+# print(f'State: {traj_estimator.state_regression_matrix}')
 C_matrix = np.zeros((N, n*N))
 for i in range(N):
     C_matrix[i, i*n] = 1.0
-print(f'Cphi: {np.linalg.pinv(C_matrix @ traj_estimator.state_data_matrix)}')
-print(f'C+C: {np.linalg.pinv(C_matrix) @ C_matrix}')
+# print(f'Cphi: {np.linalg.pinv(C_matrix @ traj_estimator.state_data_matrix)}')
+# print(f'C+C: {np.linalg.pinv(C_matrix) @ C_matrix}')
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
