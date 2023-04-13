@@ -5,12 +5,12 @@ from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 
-np.random.seed(2)
+np.random.seed(666)
 verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 3  # number of samples in a window
+N = 10  # number of samples in a window
 window_length = 0.01  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
@@ -70,15 +70,18 @@ global_thetas = False
 sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solver='RK45')
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 print('GENERATED TRAJECTORIES.')
-traj_estimator = TrajectoryEstimator(trajectories)
-state_fit = TrajectoryEstimator(trajectories)
+traj_estimator = TrajectoryEstimator(trajectories, sampling_dt)
+state_fit = TrajectoryEstimator(trajectories, sampling_dt)
 # print('REGRESSION MATRICES:')
 # print(f'Output: {traj_estimator.regression_matrix}')
 # print(f'State: {traj_estimator.state_regression_matrix}')
 C_matrix = np.zeros((N, n*N))
 for i in range(N):
     C_matrix[i, i*n] = 1.0
-# print(f'Cphi: {np.linalg.pinv(C_matrix @ traj_estimator.state_data_matrix)}')
+print(f'Cphi: {C_matrix @ traj_estimator.state_data_matrix}')
+print(f'Y: {traj_estimator.output_data_matrix}')
+print(f'pred_end {traj_estimator.prediction_matrix_end}')
+print(f'pred_start {traj_estimator.prediction_matrix_start}')
 # print(f'C+C: {np.linalg.pinv(C_matrix) @ C_matrix}')
 
 x = np.empty((n, num_integration_steps))
@@ -107,8 +110,7 @@ y[:, 0] = sys.y
 y_samples[0, 0] = sys.y
 
 print('ESTIMATOR PROPERTIES:')
-print(f'Traject condition number: {np.linalg.cond(traj_estimator.data_matrix)}')
-_, s, _ = np.linalg.svd(traj_estimator.data_matrix)
+_, s, _ = np.linalg.svd(traj_estimator.output_data_matrix)
 print('Singular values', s)
 
 
@@ -145,7 +147,7 @@ for t in range(1, num_sampling_steps):
         xhat_poly[:, t] = OUTPUT_INV(sys.t, yhat_poly[:, t], u[:, t-1])
 
         # TRAJECTORY FITTING
-        theta_traj[:, t] = traj_estimator.fit(y_samples[0, t-N+1:t+1])
+        theta_traj[:, t] = traj_estimator.fit(y_samples[:, t-N+1:t+1])
         theta_state_traj[:, t] = state_fit.fit_state(x_samples[:, t-N+1:t+1])
         xhat_traj[:, t] = traj_estimator.estimate()
         xhat_state_reg[:, t] = state_fit.estimate_state_thetas()
@@ -190,7 +192,8 @@ x1_plot.grid()
 
 traj_plot.plot(x[0, :], x[1, :], linewidth=2.0, c='blue', label='truth')
 traj_plot.plot(xhat_poly[0, N:], xhat_poly[1, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
-traj_plot.plot(xhat_traj[0, N:], xhat_traj[1, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
+traj_plot.plot(xhat_traj[0, N:], xhat_traj[1, N:], linewidth=2.0, c='green',
+               linestyle='dashed', label='output traj estimate')
 traj_plot.scatter(x[0, 0], x[1, 0], s=75, marker='*', c='blue')
 traj_plot.scatter(xhat_poly[0, N], xhat_poly[1, N], s=20, marker='*', c='red')
 traj_plot.scatter(x_samples[0, :], x_samples[1, :], s=20, marker='x', c='blue')
@@ -215,7 +218,8 @@ thetas_plot = f2.add_subplot(121)
 for i in range(d+1):
     thetas_plot.plot(sampling_time[N:], theta_poly[i, N:], linewidth=2.0, label=f'Theta[{i}], poly')
 for i in range(num_trajectories):
-    thetas_plot.plot(sampling_time[N:], theta_traj[i, N:], linewidth=2.0, linestyle='dashed', label=f'Theta[{i}], traj')
+    thetas_plot.plot(sampling_time[N:], theta_traj[i, N:], linewidth=2.0, linestyle='dashed',
+                     label=f'Theta[{i}], output fit')
 thetas_plot.set_ylim(min(np.amin(theta_poly[:, N:]), np.amin(theta_traj[:, N:])),
                      max(np.amax(theta_traj[:, N:]), np.amax(theta_poly[:, N:])))
 thetas_plot.legend()
@@ -226,13 +230,13 @@ yhat_plot = f2.add_subplot(122)
 colors = ['red', 'blue', 'green', 'orange', 'pink', 'deeppink', 'violet', 'lime', 'gray', 'black']
 for i in range(n):
     kwargs = {
-        'label': f'x[{i}] error, poly',
+        'label': f'x[{i}] error, output poly',
         'linewidth': 2.0,
         'color': colors[i]
     }
     yhat_plot.plot(sampling_time[N:], np.abs(xhat_poly[i, N:]-x_samples[i, N:]), **kwargs)
     kwargs = {
-        'label': f'x[{i}] error, traj',
+        'label': f'x[{i}] error, output fit',
         'linewidth': 2.0,
         'color': colors[i],
         'linestyle': 'dashed'
@@ -252,9 +256,9 @@ for i, trajectory in enumerate(trajectories):
     c = colors[i % len(colors)]
     sample_x_plot.scatter(trajectory[0][0, 0], trajectory[0][1, 0], marker='*', s=50, color=c)
     sample_x_plot.plot(trajectory[0][0, :], trajectory[0][1, :], linewidth=2.0, linestyle='dashed',
-                       label=f'traj sample {i}', color=c)
+                       label=f'output sample {i}', color=c)
     sample_y_plot.plot(sampling_time[:N], trajectory[1][0, :], linewidth=2.0, linestyle='dashed',
-                       label=f'traj sample {i}', color=c)
+                       label=f'output sample {i}', color=c)
 for i in range(d+1):
     c = colors[i % len(colors)]
     sample_y_plot.plot(sampling_time[:N], sampling_time[:N]**float(i), linewidth=2.0, label=f'poly sample {i}', color=c)
@@ -272,7 +276,8 @@ f4, axs = plt.subplots(nrows=n//4+1, ncols=min(4, n), figsize=(5*min(4, n), 5))
 for i, ax in enumerate(axs.ravel()):
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
     ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
-    ax.plot(sampling_time[N:], xhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
+    ax.plot(sampling_time[N:], xhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed',
+            label='output fit estimate')
     ax.plot(sampling_time[N:], xhat_state_reg[i, N:], linewidth=2.0,
             c='orange', linestyle='-.', label='state fit estimate')
     ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')

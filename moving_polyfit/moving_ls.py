@@ -38,7 +38,7 @@ class TrajectoryEstimator:
     '''
     State estimator based on fitting simulation traces to output data.
     '''
-    def __init__(self, trajectories: list):
+    def __init__(self, trajectories: list, dt: float):
         '''
         args:
             trajectories (list): list of tuples of numpy arrays, (x, y)
@@ -50,33 +50,39 @@ class TrajectoryEstimator:
         self.n = trajectories[0][0].shape[0]  # state dimension
         self.p = trajectories[0][1].shape[0]  # output dimension
 
-        self.data_matrix = np.empty((self.num_steps*self.p, self.num_trajectories))
+        self.A_matrix = np.zeros((self.n, self.n))
+        for i in range(self.n-1):
+            self.A_matrix[i, i+1] = float(self.num_steps)*dt
+
+        self.output_data_matrix = np.empty((self.num_steps*self.p, self.num_trajectories))
         self.state_data_matrix = np.empty((self.num_steps*self.n, self.num_trajectories))
-        self.prediction_matrix = np.empty((self.n, self.num_trajectories))
+        self.prediction_matrix_end = np.empty((self.n, self.num_trajectories))
+        self.prediction_matrix_start = np.empty((self.n, self.num_trajectories))
 
         for i, trajectory in enumerate(trajectories):
-            self.data_matrix[:, i] = trajectory[1].flatten(order='F')
+            self.output_data_matrix[:, i] = trajectory[1].flatten(order='F')
             self.state_data_matrix[:, i] = trajectory[0].flatten(order='F')
-            self.prediction_matrix[:, i] = trajectory[0][:, -1]
-        self.compute_matrix()
+            self.prediction_matrix_end[:, i] = trajectory[0][:, -1]
+            self.prediction_matrix_start[:, i] = trajectory[0][:, 0]
+        self.compute_output_matrix()
         self.compute_state_matrix()
 
     def compute_state_matrix(self):
         self.state_regression_matrix = np.linalg.pinv(self.state_data_matrix)
 
-    def compute_matrix(self):
-        self.regression_matrix = np.linalg.pinv(self.data_matrix)
+    def compute_output_matrix(self):
+        self.regression_matrix = np.linalg.pinv(self.output_data_matrix)
 
     def fit(self, y):
-        self.theta = self.regression_matrix @ y
+        self.theta = np.linalg.lstsq(self.output_data_matrix, y.flatten(order='F'), rcond=None)[0]
         return self.theta
 
     def fit_state(self, x):
-        self.theta_state = self.state_regression_matrix @ x.flatten(order='F')
+        self.theta_state = np.linalg.lstsq(self.state_data_matrix, x.flatten(order='F'), rcond=None)[0]
         return self.theta_state
 
     def estimate_state_thetas(self):
-        return self.prediction_matrix @ self.theta_state
+        return self.prediction_matrix_end @ self.theta_state
 
     def estimate(self):
-        return self.prediction_matrix @ self.theta
+        return self.prediction_matrix_end @ self.theta
