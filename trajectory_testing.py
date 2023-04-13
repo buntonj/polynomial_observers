@@ -1,6 +1,6 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
-from nonlinear_system.sample_odes import integrator_rhs, lorenz_rhs, tora_rhs, two_dim_example
-from nonlinear_system.sample_odes import integrator_output_inv, lorenz_output_inv, two_dim_output_inv
+from nonlinear_system.sample_odes import two_dim_example
+from nonlinear_system.sample_odes import two_dim_output_inv
 from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 10  # number of samples in a window
+N = 3  # number of samples in a window
 window_length = 0.01  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
@@ -22,21 +22,24 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 ##############################################################
 #                   FITTING PARAMETERS                       #
 ##############################################################
-num_trajectories = 5  # number of trajectories to sample for fitting
-d = 5  # degree of estimation polynomial
+num_trajectories = N  # number of trajectories to sample for fitting
+d = N-1  # degree of estimation polynomial
 
 
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-sigma = 0.1
-# ODE_RHS = lambda t, x, u: lorenz_rhs(t, x, u, sigma=sigma)
-ODE_RHS = lambda t, x, u: two_dim_example(t, x, u)
-# OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u, sigma=sigma)
-OUTPUT_INV = lambda t, y, u: two_dim_output_inv(t, y, u)
 n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
+
+
+def ODE_RHS(t, x, u):
+    return two_dim_example(t, x, u)
+
+
+def OUTPUT_INV(t, y, u):
+    return two_dim_output_inv(t, y, u)
 
 
 def output_fn(t, x, u):
@@ -270,7 +273,8 @@ for i, ax in enumerate(axs.ravel()):
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
     ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.plot(sampling_time[N:], xhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
-    ax.plot(sampling_time[N:], xhat_state_reg[i, N:], linewidth=2.0, c='blue', linestyle='-.', label='state fit estimate')
+    ax.plot(sampling_time[N:], xhat_state_reg[i, N:], linewidth=2.0,
+            c='orange', linestyle='-.', label='state fit estimate')
     ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i}](t)')

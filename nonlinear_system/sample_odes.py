@@ -58,7 +58,6 @@ def lorenz_output_deriv(t, x, u):
     xdot = lorenz_rhs(t, x, u)
     sigma = 10.0
     rho = 28.0
-    beta = 8.0/3.0
     y[0] = x[0]
     y[1] = xdot[0]
     y[2] = sigma*(xdot[1]-xdot[0])
