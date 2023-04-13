@@ -1,6 +1,6 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
-from nonlinear_system.sample_odes import integrator_rhs, lorenz_rhs, tora_rhs
-from nonlinear_system.sample_odes import integrator_output_inv, lorenz_output_inv
+from nonlinear_system.sample_odes import integrator_rhs, lorenz_rhs, tora_rhs, two_dim_example
+from nonlinear_system.sample_odes import integrator_output_inv, lorenz_output_inv, two_dim_output_inv
 from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
 import matplotlib.pyplot as plt
@@ -43,9 +43,13 @@ def generate_simulated_trajectories(sys, num, N, dt):
 
 
 sigma = 0.1
-ODE_RHS = lambda t, x, u: lorenz_rhs(t, x, u, sigma=0.1)
-OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u, sigma=0.1)
-n = 3  # system state dimension
+# ODE_RHS = lambda t, x, u: lorenz_rhs(t, x, u, sigma=0.1)
+ODE_RHS = lambda t, x, u: two_dim_example(t, x, u)
+
+# OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u, sigma=0.1)
+OUTPUT_INV = lambda t, y, u: two_dim_output_inv(t, y, u)
+
+n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
 
@@ -54,7 +58,7 @@ poly_estimator = PolyEstimator(d, N, sampling_dt)
 # residual_poly = PolyEstimator(d, d, sampling_dt)
 global_thetas = False
 
-num_trajectories = 6
+num_trajectories = 5
 sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solver='RK45')
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 print('GENERATED TRAJECTORIES.')
@@ -83,6 +87,7 @@ theta_state_traj = np.empty((num_trajectories, num_sampling_steps))
 yhat_poly = np.empty((d+1, num_sampling_steps))
 xhat_poly = np.empty((n, num_sampling_steps))
 xhat_traj = np.empty((n, num_sampling_steps))
+xhat_state_reg = np.empty((n, num_sampling_steps))
 
 integration_time = np.zeros((num_integration_steps,))
 sampling_time = np.zeros((num_sampling_steps,))
@@ -132,12 +137,13 @@ for t in range(1, num_sampling_steps):
             for i in range(d+1):
                 yhat_poly[i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
         xhat_poly[:, t] = OUTPUT_INV(sys.t, yhat_poly[:, t], u[:, t-1])
-        #residual_poly.fit(y_samples[0, t-N+1:t-N+d+1]-yhat_poly[0, t-N+1:t-N+d+1])
+        # residual_poly.fit(y_samples[0, t-N+1:t-N+d+1]-yhat_poly[0, t-N+1:t-N+d+1])
 
         # TRAJECTORY FITTING
         theta_traj[:, t] = traj_estimator.fit(y_samples[0, t-N+1:t+1])
         theta_state_traj[:, t] = state_fit.fit_state(x_samples[:, t-N+1:t+1])
         xhat_traj[:, t] = traj_estimator.estimate()
+        xhat_state_reg[:, t] = state_fit.estimate_state_thetas()
 
     else:
         theta_state_traj[:, t] = 0.0
@@ -202,7 +208,7 @@ thetas_plot = f2.add_subplot(121)
 
 for i in range(d+1):
     thetas_plot.plot(sampling_time[N:], theta_poly[i, N:], linewidth=2.0, label=f'Theta[{i}], poly')
-for i in range(n):
+for i in range(num_trajectories):
     thetas_plot.plot(sampling_time[N:], theta_traj[i, N:], linewidth=2.0, linestyle='dashed', label=f'Theta[{i}], traj')
 thetas_plot.set_ylim(min(np.amin(theta_poly[:, N:]), np.amin(theta_traj[:, N:])),
                      max(np.amax(theta_traj[:, N:]), np.amax(theta_poly[:, N:])))
@@ -261,6 +267,7 @@ for i, ax in enumerate(axs.ravel()):
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
     ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.plot(sampling_time[N:], xhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
+    ax.plot(sampling_time[N:], xhat_state_reg[i, N:], linewidth=2.0, c='blue', linestyle='-.', label='state fit estimate')
     ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i}](t)')

@@ -75,5 +75,8 @@ class TrajectoryEstimator:
         self.theta_state = self.state_regression_matrix @ x.flatten(order='F')
         return self.theta_state
 
+    def estimate_state_thetas(self):
+        return self.prediction_matrix @ self.theta_state
+
     def estimate(self):
         return self.prediction_matrix @ self.theta

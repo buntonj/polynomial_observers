@@ -81,3 +81,19 @@ def tora_rhs(t, x, u):
         u
     ])
     return rhs
+
+
+def two_dim_example(t, x, u):
+    rhs = np.array([
+        -x[0] + x[1]**3.0,
+        -x[1]
+    ])
+    return rhs
+
+
+def two_dim_output_inv(t, y, u):
+    xhat = np.array([
+        y[0],
+        np.cbrt(y[0]+y[1])
+    ])
+    return xhat
