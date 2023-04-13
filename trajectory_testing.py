@@ -6,18 +6,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 np.random.seed(2)
+verbose = False
+##############################################################
+#                     TIME  PARAMETERS                       #
+##############################################################
 N = 10  # number of samples in a window
 window_length = 0.01  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
+
 integration_per_sample = 100  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 500  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 
-mid_t = 0.0  # sampling_dt*num_sampling_steps/2.0
-f = np.pi/sampling_dt
-mag = 1.0
-verbose = False
+##############################################################
+#                   FITTING PARAMETERS                       #
+##############################################################
+num_trajectories = 5  # number of trajectories to sample for fitting
+d = 5  # degree of estimation polynomial
+
+
+##############################################################
+#                    SYSTEM PARAMETERS                       #
+##############################################################
+sigma = 0.1
+# ODE_RHS = lambda t, x, u: lorenz_rhs(t, x, u, sigma=sigma)
+ODE_RHS = lambda t, x, u: two_dim_example(t, x, u)
+# OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u, sigma=sigma)
+OUTPUT_INV = lambda t, y, u: two_dim_output_inv(t, y, u)
+n = 2  # system state dimension
+m = 1  # control input dimension
+p = 1  # output dimension
 
 
 def output_fn(t, x, u):
@@ -42,23 +61,9 @@ def generate_simulated_trajectories(sys, num, N, dt):
     return trajectories
 
 
-sigma = 0.1
-# ODE_RHS = lambda t, x, u: lorenz_rhs(t, x, u, sigma=0.1)
-ODE_RHS = lambda t, x, u: two_dim_example(t, x, u)
-
-# OUTPUT_INV = lambda t, y, u: lorenz_output_inv(t, y, u, sigma=0.1)
-OUTPUT_INV = lambda t, y, u: two_dim_output_inv(t, y, u)
-
-n = 2  # system state dimension
-m = 1  # control input dimension
-p = 1  # output dimension
-
-d = 5  # degree of estimation polynomial
 poly_estimator = PolyEstimator(d, N, sampling_dt)
-# residual_poly = PolyEstimator(d, d, sampling_dt)
 global_thetas = False
 
-num_trajectories = 5
 sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solver='RK45')
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 print('GENERATED TRAJECTORIES.')
@@ -75,7 +80,7 @@ for i in range(N):
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
-residual = np.empty((d, num_integration_steps))
+residual = np.empty((p, num_integration_steps))
 
 y_samples = np.empty((p, num_sampling_steps))
 x_samples = np.empty((n, num_sampling_steps))
@@ -113,8 +118,6 @@ for t in range(1, num_sampling_steps):
         idx = (t-1)*integration_per_sample + i
         x[:, idx], y[:, idx] = sys.step(u[:, t-1])
         integration_time[idx] = sys.t
-        # if t > N-1:
-        #    residual[:, idx] = y[:, idx] - residual_poly.estimate(sys.t)
 
     # sample the system
     sampling_time[t] = sys.t
@@ -137,13 +140,13 @@ for t in range(1, num_sampling_steps):
             for i in range(d+1):
                 yhat_poly[i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
         xhat_poly[:, t] = OUTPUT_INV(sys.t, yhat_poly[:, t], u[:, t-1])
-        # residual_poly.fit(y_samples[0, t-N+1:t-N+d+1]-yhat_poly[0, t-N+1:t-N+d+1])
 
         # TRAJECTORY FITTING
         theta_traj[:, t] = traj_estimator.fit(y_samples[0, t-N+1:t+1])
         theta_state_traj[:, t] = state_fit.fit_state(x_samples[:, t-N+1:t+1])
         xhat_traj[:, t] = traj_estimator.estimate()
         xhat_state_reg[:, t] = state_fit.estimate_state_thetas()
+        residual[:, t] = y_samples[:p, t] - yhat_poly[:p, t]
 
     else:
         theta_state_traj[:, t] = 0.0
