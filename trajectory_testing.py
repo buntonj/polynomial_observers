@@ -10,7 +10,7 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 10  # number of samples in a window
+N = 3  # number of samples in a window
 window_length = 0.01  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
@@ -163,7 +163,7 @@ for t in range(1, num_sampling_steps):
 
     if verbose:
         print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
-        print(f'Difference: {theta_state_traj[:,t]-theta_traj[:,t]}')
+        print(f'Difference: {theta_state_traj[:, t]-theta_traj[:, t]}')
 
 
 f = plt.figure(figsize=(12, 8))
