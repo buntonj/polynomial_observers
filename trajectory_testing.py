@@ -1,5 +1,5 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
-from nonlinear_system.sample_odes import two_dim_example
+from nonlinear_system.sample_odes import two_dim_example, two_dim_output_deriv
 from nonlinear_system.sample_odes import two_dim_output_inv
 from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
@@ -10,11 +10,11 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 3  # number of samples in a window
-window_length = 0.01  # number of seconds of trajectory in a single window of data
+N = 10  # number of samples in a window
+window_length = 0.08  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
-integration_per_sample = 100  # how many integration timesteps should we take between output samples?
+integration_per_sample = 2  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 500  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
@@ -22,8 +22,8 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 ##############################################################
 #                   FITTING PARAMETERS                       #
 ##############################################################
-num_trajectories = N  # number of trajectories to sample for fitting
-d = N-1  # degree of estimation polynomial
+num_trajectories = 3  # number of trajectories to sample for fitting
+d = 3  # degree of estimation polynomial
 
 
 ##############################################################
@@ -46,19 +46,25 @@ def output_fn(t, x, u):
     return x[0]
 
 
-def control_input(t, y):
-    return -y[0]**3.0
+def control_input(t, y, x=None):
+    return two_dim_output_deriv(t, x, None)[1]
+
+
+def OUTPUT_DERIV(t, x, u):
+    return two_dim_output_deriv(t, x, u)
 
 
 def generate_simulated_trajectories(sys, num, N, dt):
     trajectories = []
     for i in range(num):
+        print(f'Creating trajectory simulation no. {i}')
         x = np.empty((sys.n, N))
         y = np.empty((sys.p, N))
-        x0 = 50.0*(np.random.rand(sys.n) - 0.5)
+        x0 = 2.0*(np.random.rand(sys.n) - 0.5)
+        # x0 = OUTPUT_DERIV(None, 10.0*(np.random.randn(n) - 0.5), None)
         x[:, 0], y[:, 0] = sys.reset(x0, u0=None, t=0.0)
         for t in range(N):
-            u = control_input(t*dt, y[:, 0])
+            u = control_input(t*dt, y[:, t], x=x[:, t])
             x[:, t], y[:, t] = sys.step(u, dt=dt)
         trajectories.append((x, y))
     return trajectories
@@ -71,18 +77,7 @@ sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solve
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 print('GENERATED TRAJECTORIES.')
 traj_estimator = TrajectoryEstimator(trajectories, sampling_dt)
-state_fit = TrajectoryEstimator(trajectories, sampling_dt)
-# print('REGRESSION MATRICES:')
-# print(f'Output: {traj_estimator.regression_matrix}')
-# print(f'State: {traj_estimator.state_regression_matrix}')
-C_matrix = np.zeros((N, n*N))
-for i in range(N):
-    C_matrix[i, i*n] = 1.0
-print(f'Cphi: {C_matrix @ traj_estimator.state_data_matrix}')
-print(f'Y: {traj_estimator.output_data_matrix}')
-print(f'pred_end {traj_estimator.prediction_matrix_end}')
-print(f'pred_start {traj_estimator.prediction_matrix_start}')
-# print(f'C+C: {np.linalg.pinv(C_matrix) @ C_matrix}')
+traj_estimator.compute_output_predict_matrix(d, OUTPUT_DERIV)
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
@@ -94,15 +89,13 @@ u = np.empty((m, num_sampling_steps-1))
 
 theta_poly = np.empty((d+1, num_sampling_steps))
 theta_traj = np.empty((num_trajectories, num_sampling_steps))
-theta_state_traj = np.empty((num_trajectories, num_sampling_steps))
 yhat_poly = np.empty((d+1, num_sampling_steps))
 xhat_poly = np.empty((n, num_sampling_steps))
 xhat_traj = np.empty((n, num_sampling_steps))
-xhat_state_reg = np.empty((n, num_sampling_steps))
 
 integration_time = np.zeros((num_integration_steps,))
 sampling_time = np.zeros((num_sampling_steps,))
-x0 = 50.0*(np.random.rand(n)-0.5)
+x0 = 5.0*(np.random.rand(n)-0.5)
 x[:, 0] = x0
 x_samples[:, 0] = x0
 sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, x0=x0, dt=integration_dt, solver='RK45')
@@ -116,7 +109,7 @@ print('Singular values', s)
 
 for t in range(1, num_sampling_steps):
     # select the control input
-    u[:, t-1] = control_input(sys.t, y[:, t-1])
+    u[:, t-1] = control_input(sys.t, y[:, t-1], x=x[:, t-1])
     # integrate forward in time
     for i in range(integration_per_sample):
         # compute the right "in between" index
@@ -148,13 +141,10 @@ for t in range(1, num_sampling_steps):
 
         # TRAJECTORY FITTING
         theta_traj[:, t] = traj_estimator.fit(y_samples[:, t-N+1:t+1])
-        theta_state_traj[:, t] = state_fit.fit_state(x_samples[:, t-N+1:t+1])
-        xhat_traj[:, t] = traj_estimator.estimate()
-        xhat_state_reg[:, t] = state_fit.estimate_state_thetas()
+        xhat_traj[:, t] = OUTPUT_INV(t, traj_estimator.output_estimate(), u[:, t-1])
         residual[:, t] = y_samples[:p, t] - yhat_poly[:p, t]
 
     else:
-        theta_state_traj[:, t] = 0.0
         theta_poly[:, t] = 0.0
         theta_traj[:, t] = 0.0
         yhat_poly[:, t] = 0.0
@@ -163,7 +153,6 @@ for t in range(1, num_sampling_steps):
 
     if verbose:
         print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
-        print(f'Difference: {theta_state_traj[:, t]-theta_traj[:, t]}')
 
 
 f = plt.figure(figsize=(12, 8))
@@ -278,8 +267,6 @@ for i, ax in enumerate(axs.ravel()):
     ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.plot(sampling_time[N:], xhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed',
             label='output fit estimate')
-    ax.plot(sampling_time[N:], xhat_state_reg[i, N:], linewidth=2.0,
-            c='orange', linestyle='-.', label='state fit estimate')
     ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i}](t)')

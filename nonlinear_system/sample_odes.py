@@ -90,6 +90,16 @@ def two_dim_example(t, x, u):
     return rhs
 
 
+def two_dim_output_deriv(t, x, u):
+    xdot = two_dim_example(t, x, u)
+    y = np.array([
+        x[0],
+        xdot[0],
+        x[0] - 4*x[0]**3.0
+    ])
+    return y
+
+
 def two_dim_output_inv(t, y, u):
     xhat = np.array([
         y[0],

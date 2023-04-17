@@ -57,15 +57,18 @@ class TrajectoryEstimator:
         self.output_data_matrix = np.empty((self.num_steps*self.p, self.num_trajectories))
         self.state_data_matrix = np.empty((self.num_steps*self.n, self.num_trajectories))
         self.prediction_matrix_end = np.empty((self.n, self.num_trajectories))
-        self.prediction_matrix_start = np.empty((self.n, self.num_trajectories))
 
         for i, trajectory in enumerate(trajectories):
             self.output_data_matrix[:, i] = trajectory[1].flatten(order='F')
             self.state_data_matrix[:, i] = trajectory[0].flatten(order='F')
             self.prediction_matrix_end[:, i] = trajectory[0][:, -1]
-            self.prediction_matrix_start[:, i] = trajectory[0][:, 0]
         self.compute_output_matrix()
-        self.compute_state_matrix()
+        # self.compute_state_matrix()
+
+    def compute_output_predict_matrix(self, nderivs, der_fn):
+        self.output_prediction_matrix = np.empty((self.p*nderivs, self.num_trajectories))
+        for i in range(self.num_trajectories):
+            self.output_prediction_matrix[:, i] = der_fn(None, self.state_data_matrix[-self.n:, i], None)
 
     def compute_state_matrix(self):
         self.state_regression_matrix = np.linalg.pinv(self.state_data_matrix)
@@ -86,3 +89,6 @@ class TrajectoryEstimator:
 
     def estimate(self):
         return self.prediction_matrix_end @ self.theta
+
+    def output_estimate(self):
+        return self.output_prediction_matrix @ self.theta
