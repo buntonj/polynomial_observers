@@ -10,8 +10,8 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 10  # number of samples in a window
-window_length = 0.08  # number of seconds of trajectory in a single window of data
+N = 4  # number of samples in a window
+window_length = 0.1  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 2  # how many integration timesteps should we take between output samples?
@@ -32,6 +32,12 @@ d = 3  # degree of estimation polynomial
 n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
+
+
+def noise(t):
+    noise_mag = 0.001
+    f = 100.0
+    return noise_mag*np.sin(f*t)
 
 
 def ODE_RHS(t, x, u):
@@ -119,7 +125,7 @@ for t in range(1, num_sampling_steps):
 
     # sample the system
     sampling_time[t] = sys.t
-    y_samples[0, t], x_samples[:, t] = sys.y, sys.x
+    y_samples[0, t], x_samples[:, t] = sys.y + noise(sampling_time[t]), sys.x
 
     if t >= N-1:
         # POLYNOMIAL FITTING
