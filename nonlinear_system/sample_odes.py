@@ -12,21 +12,15 @@ class ControlAffineODE:
             if g is None:
                 self.rhs = self.zero_rhs
             else:
+                self.g = g
                 self.rhs = self.zero_f_rhs
         else:
+            self.f = f
             if g is None:
                 self.rhs = self.zero_g_rhs
             else:
+                self.g = g
                 self.rhs = self.std_rhs
-
-        # if no actuation function is supplied, then set it to zero
-        if g is None:
-            self.rhs = self.zero_g_rhs
-        else:
-            self.g = g
-
-        if (f is None) and (g is None):
-            self.rhs = self.zero_rhs
 
         # if no output is provided, then set it to zero
         if h is None:

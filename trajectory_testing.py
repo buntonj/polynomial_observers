@@ -1,7 +1,5 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
-from nonlinear_system.sample_odes import TwoDimExample
-# from nonlinear_system.sample_odes import two_dim_example, two_dim_output_deriv
-# from nonlinear_system.sample_odes import two_dim_output_inv
+from nonlinear_system.sample_odes import LorenzSystem
 from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,15 +28,15 @@ d = 3  # degree of estimation polynomial
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-n = 2  # system state dimension
+n = 3  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
 
-ODE = TwoDimExample()
+ODE = LorenzSystem()
 
 
 def noise(t):
-    noise_mag = 0.001
+    noise_mag = 1.0
     f = 100.0
     return noise_mag*np.sin(f*t)
 
