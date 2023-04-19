@@ -1,6 +1,7 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
-from nonlinear_system.sample_odes import two_dim_example, two_dim_output_deriv
-from nonlinear_system.sample_odes import two_dim_output_inv
+from nonlinear_system.sample_odes import TwoDimExample
+# from nonlinear_system.sample_odes import two_dim_example, two_dim_output_deriv
+# from nonlinear_system.sample_odes import two_dim_output_inv
 from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,6 +34,8 @@ n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
 
+ODE = TwoDimExample()
+
 
 def noise(t):
     noise_mag = 0.001
@@ -40,24 +43,8 @@ def noise(t):
     return noise_mag*np.sin(f*t)
 
 
-def ODE_RHS(t, x, u):
-    return two_dim_example(t, x, u)
-
-
-def OUTPUT_INV(t, y, u):
-    return two_dim_output_inv(t, y, u)
-
-
-def output_fn(t, x, u):
-    return x[0]
-
-
 def control_input(t, y, x=None):
-    return two_dim_output_deriv(t, x, None)[1]
-
-
-def OUTPUT_DERIV(t, x, u):
-    return two_dim_output_deriv(t, x, u)
+    return np.array([0.0])  # two_dim_output_deriv(t, x, None)[1]
 
 
 def generate_simulated_trajectories(sys, num, N, dt):
@@ -79,11 +66,10 @@ def generate_simulated_trajectories(sys, num, N, dt):
 poly_estimator = PolyEstimator(d, N, sampling_dt)
 global_thetas = False
 
-sim_sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, dt=integration_dt, solver='RK45')
+sim_sys = ContinuousTimeSystem(ODE, dt=integration_dt, solver='RK45')
 trajectories = generate_simulated_trajectories(sim_sys, num_trajectories, N, sampling_dt)
 print('GENERATED TRAJECTORIES.')
-traj_estimator = TrajectoryEstimator(trajectories, sampling_dt)
-traj_estimator.compute_output_predict_matrix(d, OUTPUT_DERIV)
+traj_estimator = TrajectoryEstimator(ODE, trajectories, sampling_dt)
 
 x = np.empty((n, num_integration_steps))
 y = np.empty((p, num_integration_steps))
@@ -104,7 +90,7 @@ sampling_time = np.zeros((num_sampling_steps,))
 x0 = 5.0*(np.random.rand(n)-0.5)
 x[:, 0] = x0
 x_samples[:, 0] = x0
-sys = ContinuousTimeSystem(n, ODE_RHS, h=output_fn, x0=x0, dt=integration_dt, solver='RK45')
+sys = ContinuousTimeSystem(ODE, x0=x0, dt=integration_dt, solver='RK45')
 y[:, 0] = sys.y
 y_samples[0, 0] = sys.y
 
@@ -143,11 +129,11 @@ for t in range(1, num_sampling_steps):
             # estimate with polynomial derivatives at endpoint
             for i in range(d+1):
                 yhat_poly[i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
-        xhat_poly[:, t] = OUTPUT_INV(sys.t, yhat_poly[:, t], u[:, t-1])
+        xhat_poly[:, t] = sys.ode.invert_output(sys.t, yhat_poly[:, t], u[:, t-1])
 
         # TRAJECTORY FITTING
         theta_traj[:, t] = traj_estimator.fit(y_samples[:, t-N+1:t+1])
-        xhat_traj[:, t] = OUTPUT_INV(t, traj_estimator.output_estimate(), u[:, t-1])
+        xhat_traj[:, t] = sys.ode.invert_output(t, traj_estimator.output_estimate(), u[:, t-1])
         residual[:, t] = y_samples[:p, t] - yhat_poly[:p, t]
 
     else:

@@ -38,12 +38,14 @@ class TrajectoryEstimator:
     '''
     State estimator based on fitting simulation traces to output data.
     '''
-    def __init__(self, trajectories: list, dt: float):
+    def __init__(self, ode, trajectories: list, dt: float):
         '''
         args:
+            ode : ODE object for system we are estimating state of
             trajectories (list): list of tuples of numpy arrays, (x, y)
                 x (np array, shape (n, num_steps))
                 y (np array, shape (p, num_steps))
+            dt (float) : time step between samples in trajectories
         '''
         self.num_trajectories = len(trajectories)
         self.num_steps = trajectories[0][0].shape[1]  # number of time steps in each simulation
@@ -63,12 +65,15 @@ class TrajectoryEstimator:
             self.state_data_matrix[:, i] = trajectory[0].flatten(order='F')
             self.prediction_matrix_end[:, i] = trajectory[0][:, -1]
         self.compute_output_matrix()
-        # self.compute_state_matrix()
+        self.ode = ode
+        self.nderivs = self.ode.nderivs
+        self.compute_output_predict_matrix()
 
-    def compute_output_predict_matrix(self, nderivs, der_fn):
-        self.output_prediction_matrix = np.empty((self.p*nderivs, self.num_trajectories))
+    def compute_output_predict_matrix(self):
+        self.output_prediction_matrix = np.empty((self.p*self.nderivs, self.num_trajectories))
         for i in range(self.num_trajectories):
-            self.output_prediction_matrix[:, i] = der_fn(None, self.state_data_matrix[-self.n:, i], None)
+            self.output_prediction_matrix[:, i] = self.ode.output_derivative(None, self.state_data_matrix[-self.n:, i],
+                                                                             None)
 
     def compute_state_matrix(self):
         self.state_regression_matrix = np.linalg.pinv(self.state_data_matrix)
