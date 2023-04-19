@@ -33,6 +33,9 @@ m = 1  # control input dimension
 p = 1  # output dimension
 
 ODE = LorenzSystem()
+n = ODE.n
+m = ODE.m
+p = ODE.p
 
 
 def noise(t):
