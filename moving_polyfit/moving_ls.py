@@ -28,7 +28,7 @@ class PolyEstimator:
         eval = self.polynomial(t)
         return eval
 
-    def differentiate(self, t, q):
+    def differentiate(self, t: float, q: int):
         # q-th derivative of polynomial fit
         eval = self.polynomial.deriv(q)(t)
         return eval
