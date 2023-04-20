@@ -50,7 +50,7 @@ class Integrator(ControlAffineODE):
         if output_fn is None:
             self.output_fn = self.position
             self.output_derivative = self.position_derivative
-            self.nderivs = 1 + (state_dim-1)  # output eval + how many derivatives does that function return
+            self.nderivs = 1 + (state_dim)  # output eval + how many derivatives does that function return
             self.invert_output = self.invert_position
         else:
             self.output_fn = output_fn
@@ -84,7 +84,9 @@ class Integrator(ControlAffineODE):
         '''
         computes the output and n-1 derivatives at the current state x
         '''
-        y_d = x
+        y_d = np.empty((self.n+1,))
+        y_d[:self.n] = x
+        y_d[-1] = u
         return y_d
 
     def invert_position(self, t: float, y_d: np.ndarray, u: np.ndarray):

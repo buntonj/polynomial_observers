@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial as P
 
-np.random.seed(666)
+np.random.seed(2)
 verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
@@ -14,7 +14,7 @@ N = 7  # number of samples in a window
 window_length = 0.1  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
-integration_per_sample = 2  # how many integration timesteps should we take between output samples?
+integration_per_sample = 10  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 500  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
@@ -121,7 +121,9 @@ M = np.max(np.abs(y_derivs[min(ODE.nderivs-1, d), :]))
 derivs_with_bound = ODE.nderivs-1
 global_bounds = np.empty((d,))
 for q in range(derivs_with_bound+1):
-    global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N+1))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
+    global_bounds[q] = (M/np.math.factorial(d+1))*np.dot(l_bound[:, q],
+                                                         np.linspace(0.0, (N-1)*sampling_dt, N, endpoint=True)**(d+1))
+    # global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N+1))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
     global_bounds[q] += (M/(np.math.factorial(d-q+1)))*((q*sampling_dt)**(d-q+1))
     bounds[q, :] += (M/(np.math.factorial(d-q+1)))*((q*sampling_dt)**(d-q+1))
 
@@ -139,9 +141,10 @@ f4.tight_layout()
 f5, axs2 = plt.subplots(nrows=derivs_with_bound//4+1, ncols=min(4, n),
                         figsize=(5*min(4, derivs_with_bound), 5))
 for i, ax in enumerate(axs2.ravel()):
-    # ax.fill_between(sampling_time[N:], yhat_poly[i, N:]-bounds[i, N:], yhat_poly[i, N:]+bounds[i, N:],
-    #                 color='red', alpha=0.5, zorder=-1)
-    ax.errorbar(sampling_time[N:], yhat_poly[i, N:], yerr=bounds[i, N:], color='red')
+    ax.fill_between(sampling_time[N:], yhat_poly[i, N:]-bounds[i, N:], yhat_poly[i, N:]+bounds[i, N:],
+                    color='red', alpha=0.5, zorder=-1)
+    ax.scatter(sampling_time[N:], yhat_poly[i, N:], color='red', marker='1')
+    # ax.errorbar(sampling_time[N:], yhat_poly[i, N:], yerr=bounds[i, N:], color='red')
     ax.plot(sampling_time[N:], yhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     ax.set_xlabel('time (s)')
