@@ -1,21 +1,7 @@
 from nonlinear_system.ct_system import ContinuousTimeSystem
+from nonlinear_system.sample_odes import Integrator
 import numpy as np
 import matplotlib.pyplot as plt
-
-
-def integrator_rhs(t, x, u):
-    '''
-    RHS for n-dimensional integrator ODE
-    dx[i]/dt = x[i+1]
-    dx[n]/dt = u
-    '''
-    rhs = np.zeros_like(x)
-    rhs[0:-1] = x[1:]
-    if u is None:
-        rhs[-1] = 0.0
-    else:
-        rhs[-1] = u
-    return rhs
 
 
 def control_input(t, y):
@@ -33,7 +19,7 @@ time = np.zeros((num_steps,))
 x0 = np.random.uniform(low=-1.0, high=1.0, size=n)  # generate a random initial state
 x[:, 0] = x0
 
-sys = ContinuousTimeSystem(2, integrator_rhs, x0=x0, dt=0.001)
+sys = ContinuousTimeSystem(Integrator(n), x0=x0, dt=0.001)
 y[:, 0] = sys.y
 
 print("Initialized CT system object.")

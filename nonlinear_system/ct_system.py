@@ -22,15 +22,17 @@ class ContinuousTimeSystem:
     x0 - initial state of system
 
     '''
-    def __init__(self, n: int, rhs, h=None, x0=None, u0=None, t=0.0, dt=1e-6, solver='RK45'):
+    def __init__(self, ode, x0=None, u0=None, t=0.0, dt=1e-6, solver='RK45'):
+        # pulling/duplicating quantities from ODE object
+        self.ode = ode
+        self.n = self.ode.n
+        self.m = self.ode.m
+        self.p = self.ode.p
 
-        self.n = n
         self.t = t
-        self.rhs = rhs
-        if h is None:
-            self.output = identity_output
-        else:
-            self.output = h
+        self.rhs = self.ode.rhs
+        self.output = self.ode.h
+
         self.dt = dt
 
         if x0 is None:
@@ -40,14 +42,9 @@ class ContinuousTimeSystem:
 
         self.u = u0
         self.y = self.output(self.t, self.x, self.u)
-        if self.y.shape == tuple():
-            self.p = 1
-        else:
-            self.p = self.y.shape[0]
-
         self.solver = solver
 
-    def step(self, u, dt=None):
+    def step(self, u: np.ndarray, dt=None):
         # parameterize the ODE right hand side (using a def for cleanliness)
         def f(t, x):
             return self.rhs(t, x, u)
@@ -66,9 +63,7 @@ class ContinuousTimeSystem:
         '''
         self.x = x0
         self.t = t
+        if u0 is not None:
+            self.u = u0
         self.y = self.output(self.t, self.x, self.u)
         return self.x, self.y
-
-
-def identity_output(t, x, u):
-    return x
