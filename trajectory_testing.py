@@ -40,8 +40,8 @@ p = ODE.p
 
 def noise(t):
     noise_mag = 1.0
-    f = 100.0
-    return noise_mag*np.sin(f*t)
+    # f = 100.0
+    return noise_mag*np.random.randn()  # noise_mag*np.sin(f*t)
 
 
 def control_input(t, y, x=None):

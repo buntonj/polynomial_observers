@@ -156,7 +156,7 @@ class TwoDimExample(ControlAffineODE):
     def __init__(self):
         self.output_fn = self.position
         self.output_derivative = self.position_derivative
-        self.nderivs = 2 + 1  # output eval + how many derivatives does that function return
+        self.nderivs = 1 + 2  # output eval + how many derivatives does that function return
         self.invert_output = self.invert_position
         super().__init__(2, 1, f=self.f, h=self.output_fn)
 
