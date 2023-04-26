@@ -10,7 +10,7 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 10  # number of samples in a window
+N = 20  # number of samples in a window
 window_length = 0.1  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
@@ -22,14 +22,14 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 ##############################################################
 #                   FITTING PARAMETERS                       #
 ##############################################################
-d = 4  # degree of estimation polynomial
+d = 6  # degree of estimation polynomial
 
 l_bound = np.zeros((N, d))
 num_t_points = N
-for i in range(N-num_t_points, N):
-    evals = np.zeros(N)
+for i in range(num_t_points):
+    evals = np.zeros(num_t_points)
     evals[i] = 1.0
-    l_i = P.fit(np.linspace(i*sampling_dt, N*sampling_dt, num_t_points, endpoint=False), evals, N-1)
+    l_i = P.fit(np.linspace((N-num_t_points)*sampling_dt, N*sampling_dt, num_t_points, endpoint=False), evals, N-1)
     for q in range(d):
         l_bound[i, q] = np.abs(l_i.deriv(q)((N-1)*sampling_dt))  # coefficient for i-th residual in bound
         print(f'|l_{i}^({q})(t)|: {l_bound[i, q]}')
@@ -124,7 +124,7 @@ global_bounds = np.empty((d,))
 for q in range(derivs_with_bound+1):
     # global_bounds[q] = (M/np.math.factorial(d+1))*np.dot(l_bound[:, q],
     #                                                     np.linspace(0.0, (N-1)*sampling_dt, N, endpoint=True)**(d+1))
-    global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N+1))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
+    global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
     global_bounds[q] += (M/(np.math.factorial(d-q+1)))*((q*sampling_dt)**(d-q+1))
     bounds[q, :] += (M/(np.math.factorial(d-q+1)))*((q*sampling_dt)**(d-q+1))
 
