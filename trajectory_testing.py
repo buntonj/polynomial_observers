@@ -4,6 +4,7 @@ from moving_polyfit.moving_ls import PolyEstimator, TrajectoryEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial as P
+from numpy.polynomial import Polynomial as P
 
 np.random.seed(0)
 verbose = False
