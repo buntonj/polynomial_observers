@@ -50,13 +50,13 @@ verbose_lagrange = False  # to see computation details of lagrange polynomial co
 for i in range(num_t_points):
     # build the lagrange polynomial, which is zero at all evaluation samples except one
     evals = np.zeros(num_t_points)
-    evals[-i] = 1.0  # we are choosing the data points that are closest to our evaluation point
-    l_i = P.fit(l_times, evals, N-1)
+    evals[-(1+i)] = 1.0  # we are choosing the data points that are closest to our evaluation point
+    l_i = P.fit(l_times, evals, d)
 
     # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
     if verbose_lagrange:
         for j in range(num_t_points):
-            print(f't = {l_times[j]}, l_i(t) = {l_i(l_times[j])}')
+            print(f't = {l_times[j]:.3f}, l_i(t) = {l_i(l_times[j])}')
 
     # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
     for q in range(d):
