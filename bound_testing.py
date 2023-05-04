@@ -37,12 +37,6 @@ def control_input(t, y, x=None):
     return np.array([np.cos(50*t)])  # two_dim_output_deriv(t, x, None)[1]
 
 
-
-def control_input(t, y, x=None):
-    # if the system has control inputs, we can calculate them here with time-varying output or state feedback
-    return np.array([np.cos(50*t)])  # two_dim_output_deriv(t, x, None)[1]
-
-
 ##############################################################
 #                   FITTING PARAMETERS                       #
 ##############################################################
@@ -75,11 +69,6 @@ for i in range(num_t_points):
         l_bound[-(1+i), q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
         if verbose_lagrange:
             print(f'|l_{num_t_points-i}^({q})(t)|: {l_bound[-(1+i), q]}')  # for an idea of the scale of each term
-
-
-# if the system has control inputs, we can calculate them here with time-varying output or state feedback
-def control_input(t, y, x=None):
-    return np.array([np.cos(50*t)])  # two_dim_output_deriv(t, x, None)[1]
 
 
 poly_estimator = PolyEstimator(d, N, sampling_dt)
