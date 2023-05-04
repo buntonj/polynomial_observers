@@ -10,6 +10,7 @@ class PolyEstimator:
         self.d = d
         self.N = N
         self.dt = dt
+        self.residuals = np.empty((self.N,))
 
     def fit(self, y, t0=0.0):
         '''
@@ -17,7 +18,13 @@ class PolyEstimator:
         If t0 is not provided, does the fitting in ``local coordinates''
         i.e., treats the first index as a sample from t0=0.0.
         '''
-        self.polynomial = P.fit(np.linspace(t0, t0+self.N*self.dt, self.N, endpoint=False), y, self.d)
+        t = np.linspace(t0, t0+self.N*self.dt, self.N, endpoint=False)
+        self.polynomial = P.fit(t, y, self.d)
+
+        # compute and save the fit residuals
+        for i in range(y.shape[0]):
+            self.residuals[i] = np.abs(self.polynomial(t[i]) - y[i])
+
         return self.polynomial.coef
 
     def estimate(self, t):
