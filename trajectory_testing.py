@@ -33,12 +33,15 @@ m = 1  # control input dimension
 p = 1  # output dimension
 
 ODE = LorenzSystem()
+n = ODE.n
+m = ODE.m
+p = ODE.p
 
 
 def noise(t):
     noise_mag = 1.0
-    f = 100.0
-    return noise_mag*np.sin(f*t)
+    # f = 100.0
+    return noise_mag*np.random.randn()  # noise_mag*np.sin(f*t)
 
 
 def control_input(t, y, x=None):
