@@ -60,9 +60,9 @@ for i in range(num_t_points):
 
     # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
     for q in range(d):
-        l_bound[-i, q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
+        l_bound[-(1+i), q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
         if verbose_lagrange:
-            print(f'|l_{i}^({q})(t)|: {l_bound[i, q]}')  # for an idea of the scale of each term
+            print(f'|l_{num_t_points-i}^({q})(t)|: {l_bound[-(1+i), q]}')  # for an idea of the scale of each term
 
 
 # if the system has control inputs, we can calculate them here with time-varying output or state feedback
