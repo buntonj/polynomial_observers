@@ -10,13 +10,13 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 10  # number of samples in a window
+N = 20  # number of samples in a window
 window_length = 0.01  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 500  # total number of steps taken in the
+num_sampling_steps = 1000  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 
 ##############################################################
@@ -93,7 +93,7 @@ l_bound = np.zeros((N, d))
 num_t_points = d + 1
 eval_time = (N-1)*sampling_dt
 l_times = np.linspace((N-num_t_points)*sampling_dt, N*sampling_dt, num_t_points, endpoint=False)
-verbose_lagrange = True  # to see computation details of lagrange polynomial construction/derivatives
+verbose_lagrange = False  # to see computation details of lagrange polynomial construction/derivatives
 
 for i in range(num_t_points):
     # build the lagrange polynomial, which is zero at all evaluation samples except one
@@ -130,6 +130,7 @@ residual = np.empty((N, num_sampling_steps))
 bounds = np.zeros((d, num_sampling_steps))
 residual_traj = np.empty_like(residual)
 bounds_traj = np.empty_like(bounds)
+y_plusone_traj = np.empty((num_sampling_steps,))
 
 # setting up arrays for variables at sampling instants (could be done with index splicing)
 y_samples = np.empty((p, num_sampling_steps))
@@ -187,6 +188,10 @@ for t in range(1, num_sampling_steps):
             yhat_poly[i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
             yhat_traj[i, t] = traj_estimator.differentiate((N-1)*sampling_dt, i)
 
+        y_plusone_traj[t] = np.inf
+        for i in range(num_sim_steps):
+            y_plusone_traj[t] = min(y_plusone_traj[t], np.abs(traj_estimator.differentiate(i*sampling_dt, d)))
+
         # compute a state estimate from the derivatives
         xhat_poly[:, t] = sys.ode.invert_output(sys.t, yhat_poly[:, t], u[:, t-1])
         xhat_traj[:, t] = sys.ode.invert_output(sys.t, yhat_traj[:, t], u[:, t-1])
@@ -194,6 +199,7 @@ for t in range(1, num_sampling_steps):
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
             bounds[q, t] = np.dot(residual[:, t], l_bound[:, q])
+            bounds_traj[q, t] = np.dot(residual_traj[:, t], l_bound[:, q])
 
     else:
         theta_poly[:, t] = 0.0
@@ -215,11 +221,13 @@ for q in range(d):
     global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
     global_bounds[q] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
     bounds[q, :] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
+    bounds_traj[q, :] += ((M-y_plusone_traj)/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
 
 f4, axs = plt.subplots(nrows=d//4+1, ncols=min(4, n), figsize=(5*min(4, n), 5))
 for i, ax in enumerate(axs.ravel()):
     ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
     ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+    ax.plot(sampling_time[N:], xhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i}](t)')
@@ -232,9 +240,12 @@ f5, axs2 = plt.subplots(nrows=d//4+1, ncols=min(4, n),
 for i, ax in enumerate(axs2.ravel()):
     ax.fill_between(sampling_time[N:], yhat_poly[i, N:]-bounds[i, N:], yhat_poly[i, N:]+bounds[i, N:],
                     color='red', alpha=0.5, zorder=-1)
+    ax.fill_between(sampling_time[N:], yhat_traj[i, N:]-bounds_traj[i, N:], yhat_traj[i, N:]+bounds_traj[i, N:],
+                    color='green', alpha=0.5, zorder=-1)
     ax.scatter(sampling_time[N:], yhat_poly[i, N:], color='red', marker='1')
     # ax.errorbar(sampling_time[N:], yhat_poly[i, N:], yerr=bounds[i, N:], color='red')
     ax.plot(sampling_time[N:], yhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+    ax.plot(sampling_time[N:], yhat_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj estimate')
     ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'y^({i})(t)')
@@ -248,11 +259,46 @@ for i, ax in enumerate(axs3.ravel()):
     ax.plot(sampling_time[N:], np.abs(yhat_poly[i, N:]-y_derivs_samples[i, N:]), linewidth=2.0,
             c='red', label='poly error')
     ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds[i, N:],
-                    alpha=0.5, zorder=-1)
+                    alpha=0.3, zorder=-1, color='red')
+    # ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[i], linewidth=2.0,
+    #        c='black', label='global bound')
+    ax.plot(sampling_time[N:], bounds[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
+    ax.plot(sampling_time[N:], np.abs(yhat_traj[i, N:]-y_derivs_samples[i, N:]), linewidth=2.0,
+            c='green', label='traj error')
+    ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds_traj[i, N:],
+                    alpha=0.3, zorder=-1, color='green')
+    ax.plot(sampling_time[N:], bounds_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj bound')
+    ax.set_xlabel('time (s)')
+    ax.set_ylabel(f'y^({i})(t)')
+    ax.legend()
+    ax.grid()
+f6.tight_layout()
+
+f7, axs4 = plt.subplots(nrows=d//4+1, ncols=min(4, n),
+                        figsize=(5*min(4, d), 5))
+for i, ax in enumerate(axs4.ravel()):
+    ax.plot(sampling_time[N:], np.abs(yhat_traj[i, N:]-y_derivs_samples[i, N:]), linewidth=2.0,
+            c='green', label='traj error')
+    ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds_traj[i, N:],
+                    alpha=0.3, zorder=-1, color='green')
+    ax.plot(sampling_time[N:], bounds_traj[i, N:], linewidth=2.0, c='green', linestyle='dashed', label='traj bound')
+    # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
+    ax.set_xlabel('time (s)')
+    ax.set_ylabel(f'y^({i})(t)')
+    ax.legend()
+    ax.grid()
+f7.tight_layout()
+
+f8, axs8 = plt.subplots(nrows=d//4+1, ncols=min(4, n),
+                        figsize=(5*min(4, d), 5))
+for i, ax in enumerate(axs8.ravel()):
+    ax.plot(sampling_time[N:], np.abs(yhat_poly[i, N:]-y_derivs_samples[i, N:]), linewidth=2.0,
+            c='red', label='poly error')
+    ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds[i, N:],
+                    alpha=0.3, zorder=-1, color='red')
     ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[i], linewidth=2.0,
             c='black', label='global bound')
     ax.plot(sampling_time[N:], bounds[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
-    # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'y^({i})(t)')
     ax.legend()
