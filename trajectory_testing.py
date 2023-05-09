@@ -66,7 +66,7 @@ def generate_simulations(system, num_simulations: int, num_steps: int):
     for i in range(num_simulations):
         # resetting the system for each simulation
         t = 0.0
-        x[:, 0], _ = system.reset(np.random.rand(system.n))
+        x[:, 0], _ = system.reset((np.random.rand(system.n)-0.5)*2.0)
 
         # kick-start, compute initial outputs
         u = control_input(t, y[:, 0, 0, i])

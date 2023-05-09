@@ -10,13 +10,13 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 10  # number of samples in a window
-window_length = 0.01  # number of seconds of trajectory in a single window of data
+N = 20  # number of samples in a window
+window_length = 0.02  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 500  # total number of steps taken in the
+num_sampling_steps = 10000  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 
 ##############################################################
@@ -175,7 +175,7 @@ f5, axs2 = plt.subplots(nrows=d//4+1, ncols=min(4, n),
 for i, ax in enumerate(axs2.ravel()):
     ax.fill_between(sampling_time[N:], yhat_poly[i, N:]-bounds[i, N:], yhat_poly[i, N:]+bounds[i, N:],
                     color='red', alpha=0.5, zorder=-1)
-    ax.scatter(sampling_time[N:], yhat_poly[i, N:], color='red', marker='1')
+    ax.scatter(sampling_time[N:], yhat_poly[i, N:], color='red', marker='.')
     # ax.errorbar(sampling_time[N:], yhat_poly[i, N:], yerr=bounds[i, N:], color='red')
     ax.plot(sampling_time[N:], yhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
