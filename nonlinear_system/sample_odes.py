@@ -190,3 +190,37 @@ class TwoDimExample(ControlAffineODE):
             np.cbrt(y[0]+y[1])
         ])
         return xhat
+
+
+class AckermanModel(ControlAffineODE):
+    def __init__(self, axle_sep: float, output_fn=None, output_derivative=None):
+        '''
+        axle_sep (float): the distance between the front and rear axles.
+        '''
+        self.axle_sep = axle_sep
+
+        if output_fn is None:
+            self.output_fn = self.position
+            self.output_derivative = self.position_derivative
+            self.nderivs = 2
+            self.invert_output = self.invert_position
+            if output_derivative is not None:
+                self.output_derivative = output_derivative
+
+        super().__init__(3, 2, output_dim=2, g=self.ackerman_g, h=self.output_fn)
+
+    def ackerman_g(self, x):
+        return np.array([[np.cos(x[2]), 0.],
+                         [np.sin(x[2]), 0.],
+                         [np.tan(x[3])/self.axle_sep, 0.],
+                         [0., 1]])
+
+    def position(self, t: float, x: np.ndarray, u: np.ndarray):
+        return x[:2]
+
+    def position_derivative(self, t: float, x: np.ndarray, u: np.ndarray):
+        y_d = np.empty((2, 2))
+        xdot = self.rhs(t, x, u)
+        y_d[:, 0] = x[:2]
+        y_d[:, 1] = xdot[:2]
+        return y_d
