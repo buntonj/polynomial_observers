@@ -10,13 +10,13 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 20  # number of samples in a window
-window_length = 0.02  # number of seconds of trajectory in a single window of data
+N = 50  # number of samples in a window
+window_length = 0.04  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 10000  # total number of steps taken in the
+num_sampling_steps = 500  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 
 ##############################################################
@@ -25,11 +25,16 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
+noise_mag = 0.001  # magnitude of noise to be applied to outputs
 
 ODE = LorenzSystem()
 n = ODE.n
 m = ODE.m
 p = ODE.p
+
+
+def noise_generator(t: float, mag: float, p: int) -> np.ndarray:
+    return mag*(np.random.rand(p)-0.5)
 
 
 def control_input(t, y, x=None):
@@ -43,7 +48,7 @@ def control_input(t, y, x=None):
 # currently, we set this to one below the max we can explicitly compute (for bound purposes)
 d = ODE.nderivs-1  # degree of estimation polynomial
 
-# this vector will be multiplied with the residuals
+# this vector will be multiplied with the residuals + noise
 l_bound = np.zeros((N, d))
 
 # the theory allows us to pick any subset of (at least) d + 1 points containing the evaluation point.
@@ -87,6 +92,7 @@ bounds = np.zeros((d, num_sampling_steps))
 
 # setting up arrays for variables at sampling instants (could be done with index splicing)
 y_samples = np.empty((p, num_sampling_steps))
+noise_samples = np.empty((p, num_sampling_steps))
 y_derivs_samples = np.empty((ODE.nderivs, num_sampling_steps))
 x_samples = np.empty((n, num_sampling_steps))
 u = np.empty((m, num_sampling_steps-1))
@@ -123,6 +129,8 @@ for t in range(1, num_sampling_steps):
     # sample the system
     sampling_time[t] = sys.t
     y_samples[0, t], x_samples[:, t] = sys.y, sys.x
+    noise_samples[:, t] = noise_generator(t, noise_mag, p)  # generate some noise
+    y_samples[:, t] += noise_samples[:, t]  # add it to the signal
     y_derivs_samples[:, t] = sys.ode.output_derivative(sys.t, sys.x, u[:, t-1])
 
     if t >= N-1:
@@ -139,7 +147,7 @@ for t in range(1, num_sampling_steps):
 
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
-            bounds[q, t] = np.dot(residual[:, t], l_bound[:, q])
+            bounds[q, t] = np.dot(residual[:, t] + np.abs(noise_samples[:, t-N+1:t+1]), l_bound[:, q])
 
     else:
         theta_poly[:, t] = 0.0
