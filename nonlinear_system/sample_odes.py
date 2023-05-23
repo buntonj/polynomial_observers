@@ -202,14 +202,15 @@ class AckermanModel(ControlAffineODE):
         if output_fn is None:
             self.output_fn = self.position
             self.output_derivative = self.position_derivative
-            self.nderivs = 2
+            self.nderivs = 1 + 4  # output eval + four derivatives
+            self.uderivs = 1 + 2  # how many derivatives of the input do we need for our position derivatives?
             self.invert_output = self.invert_position
             if output_derivative is not None:
                 self.output_derivative = output_derivative
 
         super().__init__(5, 2, output_dim=2, f=self.ackerman_f, g=self.ackerman_g, h=self.output_fn)
 
-    def ackerman_f(self, x):
+    def ackerman_f(self, t: float, x: np.ndarray):
         '''
         state is:
         x[0] - x coordinate of rear axle center
@@ -218,19 +219,20 @@ class AckermanModel(ControlAffineODE):
         x[3] - linear velocity
         x[4] - angle of front wheels
         '''
-        return np.array([[x[3]*np.cos(x[2])],
-                         [x[3]*np.sin(x[2])],
-                         [(x[3]/self.axle_sep)*np.tan(x[4])],
-                         [0.0],
-                         [0.0]])
+        return np.array([x[3]*np.cos(x[2]),
+                         x[3]*np.sin(x[2]),
+                         (x[3]/self.axle_sep)*np.tan(x[4]),
+                         0.0,
+                         0.0])
 
-    def ackerman_g(self, x):
+    def ackerman_g(self, t: float, x: np.ndarray):
         '''
         input is:
         u[0] - linear acceleration
         u[1] - angular velocity of front wheels
         '''
         return np.array([[0., 0.],
+                         [0., 0.],
                          [0., 0.],
                          [1., 0.],
                          [0., 1.]])
@@ -243,7 +245,8 @@ class AckermanModel(ControlAffineODE):
         # u (np.ndarray) u.shape = (input_dim, ODE.nderivs-1)
         y_d = np.empty((self.p, self.nderivs))
         y_d[:, 0] = x[:2]
-        y_d[:, 1] = self.rhs(t, x, u[:, 0])
+
+        y_d[:, 1] = self.rhs(t, x, u[:, 0])[:2]
 
         y_d[0, 2] = np.cos(x[2])*u[0, 0]-(1./self.axle_sep)*np.sin(x[2])*np.tan(x[4])*(x[3]**2.0)
         y_d[1, 2] = np.sin(x[2])*u[0, 0]-(1./self.axle_sep)*np.cos(x[2])*np.tan(x[4])*(x[3]**2.0)
@@ -278,3 +281,9 @@ class AckermanModel(ControlAffineODE):
         y_d[1, 4] += (-1./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.cos(x[2])*(x[3]**2.0)*u[1, 1]
         y_d[1, 4] += np.sin(x[2])*u[0, 2]
         return y_d
+
+    def invert_position(self, y, u):
+        '''
+        TODO: Solution will have to be computed either analytically or via Newton's method
+        '''
+        return None
