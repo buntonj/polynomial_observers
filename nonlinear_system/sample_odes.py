@@ -190,3 +190,100 @@ class TwoDimExample(ControlAffineODE):
             np.cbrt(y[0]+y[1])
         ])
         return xhat
+
+
+class AckermanModel(ControlAffineODE):
+    def __init__(self, axle_sep: float, output_fn=None, output_derivative=None):
+        '''
+        axle_sep (float): the distance between the front and rear axles.
+        '''
+        self.axle_sep = axle_sep
+
+        if output_fn is None:
+            self.output_fn = self.position
+            self.output_derivative = self.position_derivative
+            self.nderivs = 1 + 4  # output eval + four derivatives
+            self.uderivs = 1 + 2  # how many derivatives of the input do we need for our position derivatives?
+            self.invert_output = self.invert_position
+            if output_derivative is not None:
+                self.output_derivative = output_derivative
+
+        super().__init__(5, 2, output_dim=2, f=self.ackerman_f, g=self.ackerman_g, h=self.output_fn)
+
+    def ackerman_f(self, t: float, x: np.ndarray):
+        '''
+        state is:
+        x[0] - x coordinate of rear axle center
+        x[1] - y coordinate of rear axle center
+        x[2] - heading of vehicle as angle from x axis
+        x[3] - linear velocity
+        x[4] - angle of front wheels
+        '''
+        return np.array([x[3]*np.cos(x[2]),
+                         x[3]*np.sin(x[2]),
+                         (x[3]/self.axle_sep)*np.tan(x[4]),
+                         0.0,
+                         0.0])
+
+    def ackerman_g(self, t: float, x: np.ndarray):
+        '''
+        input is:
+        u[0] - linear acceleration
+        u[1] - angular velocity of front wheels
+        '''
+        return np.array([[0., 0.],
+                         [0., 0.],
+                         [0., 0.],
+                         [1., 0.],
+                         [0., 1.]])
+
+    def position(self, t: float, x: np.ndarray, u: np.ndarray):
+        return x[:2]
+
+    def position_derivative(self, t: float, x: np.ndarray, u: np.ndarray):
+        # input u must also contain its derivative information
+        # u (np.ndarray) u.shape = (input_dim, ODE.nderivs-1)
+        y_d = np.empty((self.p, self.nderivs))
+        y_d[:, 0] = x[:2]
+
+        y_d[:, 1] = self.rhs(t, x, u[:, 0])[:2]
+
+        y_d[0, 2] = np.cos(x[2])*u[0, 0]-(1./self.axle_sep)*np.sin(x[2])*np.tan(x[4])*(x[3]**2.0)
+        y_d[1, 2] = np.sin(x[2])*u[0, 0]+(1./self.axle_sep)*np.cos(x[2])*np.tan(x[4])*(x[3]**2.0)
+
+        y_d[0, 3] = (-3./self.axle_sep)*np.sin(x[2])*np.tan(x[4])*u[0, 0]*x[3]
+        y_d[0, 3] += (-1./(self.axle_sep**2.0))*np.cos(x[2])*(np.tan(x[4])**2.0)*(x[3]**3.0)
+        y_d[0, 3] += (-1./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.sin(x[2])*(x[3]**2.0)*u[1, 0]
+        y_d[0, 3] += np.cos(x[2])*u[0, 1]
+
+        y_d[1, 3] = (3./self.axle_sep)*np.cos(x[2])*np.tan(x[4])*u[0, 0]*x[3]
+        y_d[1, 3] += (-1./(self.axle_sep**2.0))*np.sin(x[2])*(np.tan(x[4])**2.0)*(x[3]**3.0)
+        y_d[1, 3] += (1./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.cos(x[2])*(x[3]**2.0)*u[1, 0]
+        y_d[1, 3] += np.sin(x[2])*u[0, 1]
+
+        y_d[0, 4] = (-3./self.axle_sep)*np.sin(x[2])*np.tan(x[4])*(u[0, 0]**2.0)
+        y_d[0, 4] += (-6./(self.axle_sep**2.0))*np.cos(x[2])*(np.tan(x[4])**2.0)*u[0, 0]*(x[3]**2.0)
+        y_d[0, 4] += (1./(self.axle_sep**3.0))*np.sin(x[2])*(np.tan(x[4])**3.0)*(x[3]**4.0)
+        y_d[0, 4] += (-5./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.sin(x[2])*u[0, 0]*x[3]*u[1, 0]
+        y_d[0, 4] += (-3./(self.axle_sep**2.0))*np.cos(x[2])*(1./np.cos(x[4])**2.0)*np.tan(x[4])*(x[3]**3.0)*u[1, 0]
+        y_d[0, 4] += (-2./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.sin(x[2])*np.tan(x[4])*(x[3]**2.0)*(u[1, 0]**2.0)
+        y_d[0, 4] += (-4./self.axle_sep)*np.sin(x[2])*np.tan(x[4])*x[3]*u[1, 1]
+        y_d[0, 4] += (-1./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.sin(x[2])*(x[3]**2.0)*u[1, 1]
+        y_d[0, 4] += np.cos(x[2])*u[0, 2]
+
+        y_d[1, 4] = (3./self.axle_sep)*np.cos(x[2])*np.tan(x[4])*(u[0, 0]**2.0)
+        y_d[1, 4] += (-6./(self.axle_sep**2.0))*np.sin(x[2])*(np.tan(x[4])**2.0)*u[0, 0]*(x[3]**2.0)
+        y_d[1, 4] += (-1./(self.axle_sep**3.0))*np.cos(x[2])*(np.tan(x[4])**3.0)*(x[3]**4.0)
+        y_d[1, 4] += (5./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.cos(x[2])*u[0, 0]*x[3]*u[1, 0]
+        y_d[1, 4] += (-3./(self.axle_sep**2.0))*np.sin(x[2])*(1./np.cos(x[4])**2.0)*np.tan(x[4])*(x[3]**3.0)*u[1, 0]
+        y_d[1, 4] += (2./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.cos(x[2])*np.tan(x[4])*(x[3]**2.0)*(u[1, 0]**2.0)
+        y_d[1, 4] += (4./self.axle_sep)*np.cos(x[2])*np.tan(x[4])*x[3]*u[1, 1]
+        y_d[1, 4] += (-1./self.axle_sep)*(1./np.cos(x[4])**2.0)*np.cos(x[2])*(x[3]**2.0)*u[1, 1]
+        y_d[1, 4] += np.sin(x[2])*u[0, 2]
+        return y_d
+
+    def invert_position(self, y, u):
+        '''
+        TODO: Solution will have to be computed either analytically or via Newton's method
+        '''
+        return None

@@ -41,6 +41,56 @@ class PolyEstimator:
         return eval
 
 
+class MultiDimPolyEstimator:
+    '''
+    Output estimator based on estimating a polynomial of degree d on the outputs.
+    '''
+    def __init__(self, p: int, d: int, N: int, dt: float):
+        self.p = p  # dimension of signal to be fit
+        self.d = d  # degree of polynomial to fit
+        self.N = N  # number of samples to fit in each window
+        self.dt = dt  # timestep between samples
+        self.residuals = np.empty((self.p, self.N))  # will hold errors for each sample
+
+    def fit(self, y, t0=0.0):
+        '''
+        Convenience fitting function wrapper.
+        If t0 is not provided, does the fitting in ``local coordinates''
+        i.e., treats the first index as a sample from t0=0.0.
+        y (np.ndarray, shape (p, N))
+        '''
+        t = np.linspace(t0, t0+self.N*self.dt, self.N, endpoint=False)
+        self.polynomials = [None for i in range(self.p)]
+        for q in range(self.p):
+            self.polynomials[q] = P.fit(t, y[q, :], self.d)
+
+        # compute and save the fit residuals
+        for i in range(self.N):
+            for q in range(self.p):
+                self.residuals[q, i] = self.polynomials[q](t[i]) - y[q, i]
+
+        self.coefs = np.array([poly.coef for poly in self.polynomials])
+
+        return self.coefs  # coefs are np.ndarray of shape (d+1, p)
+
+    def estimate(self, t):
+        '''
+        input: t - a time to evaluate the current polyfit
+        output: the current polynomial fit
+        '''
+        eval = np.zeros((self.p,))
+        for i in range(self.p):
+            eval[i] = self.polynomials[i](t)
+        return eval
+
+    def differentiate(self, t: float, q: int):
+        # q-th derivative of polynomial fit
+        eval = np.zeros((self.p,))
+        for i in range(self.p):
+            eval[i] = self.polynomials[i].deriv(q)(t)
+        return eval
+
+
 class TrajectoryEstimator:
     '''
     State estimator based on fitting simulation traces to output data.
