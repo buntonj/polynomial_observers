@@ -54,7 +54,7 @@ def control_input(t, y, x=None) -> np.ndarray:
 #                   FITTING PARAMETERS                       #
 ##############################################################
 # currently, we set this to one below the max we can explicitly compute (for bound purposes)
-d = ODE.nderivs-2  # degree of estimation polynomial
+d = ODE.nderivs-1  # degree of estimation polynomial
 
 # this vector will be multiplied with the residuals + noise
 l_bound = np.zeros((N, d))
@@ -174,9 +174,8 @@ for i in range(p):
 global_bounds = np.empty((p, d))
 for q in range(d):
     for r in range(p):
-        # global_bounds[q] = (M/np.math.factorial(d+1))*np.dot(l_bound[:, q],
-        #                                                     np.linspace(0.0, (N-1)*sampling_dt, N, endpoint=True)**(d+1))
-        global_bounds[r, q] = (M[r]/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
+        global_bounds[r, q] = (M[r]/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))
+        global_bounds *= np.max(l_bound[:, q])
         global_bounds[r, q] += (M[r]/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
         bounds[r, q, :] += (M[r]/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
 
@@ -193,9 +192,13 @@ for i, ax in enumerate(axs.ravel()):
 f4.tight_layout()
 '''
 
+gridrows = int(np.ceil(d//4))
+gridcols = min(4, d)
+size = (5*gridcols, 5)
+
 for q in range(p):
-    f5, axs2 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
-                            figsize=(5*min(4, d), 5))
+    f5, axs2 = plt.subplots(nrows=gridrows, ncols=gridcols,
+                            figsize=size)
     for i, ax in enumerate(axs2.ravel()):
         ax.fill_between(sampling_time[N:], yhat_poly[q, i, N:]-bounds[q, i, N:], yhat_poly[q, i, N:]+bounds[q, i, N:],
                         color='red', alpha=0.5, zorder=-1)
@@ -209,8 +212,8 @@ for q in range(p):
         ax.grid()
     f5.tight_layout()
 
-    f6, axs3 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
-                            figsize=(5*min(4, d), 5))
+    f6, axs3 = plt.subplots(nrows=gridrows, ncols=gridcols,
+                            figsize=size)
     for i, ax in enumerate(axs3.ravel()):
         ax.plot(sampling_time[N:], np.abs(yhat_poly[q, i, N:]-y_derivs_samples[q, i, N:]), linewidth=2.0,
                 c='red', label='poly error')

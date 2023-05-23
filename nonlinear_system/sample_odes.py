@@ -249,7 +249,7 @@ class AckermanModel(ControlAffineODE):
         y_d[:, 1] = self.rhs(t, x, u[:, 0])[:2]
 
         y_d[0, 2] = np.cos(x[2])*u[0, 0]-(1./self.axle_sep)*np.sin(x[2])*np.tan(x[4])*(x[3]**2.0)
-        y_d[1, 2] = np.sin(x[2])*u[0, 0]-(1./self.axle_sep)*np.cos(x[2])*np.tan(x[4])*(x[3]**2.0)
+        y_d[1, 2] = np.sin(x[2])*u[0, 0]+(1./self.axle_sep)*np.cos(x[2])*np.tan(x[4])*(x[3]**2.0)
 
         y_d[0, 3] = (-3./self.axle_sep)*np.sin(x[2])*np.tan(x[4])*u[0, 0]*x[3]
         y_d[0, 3] += (-1./(self.axle_sep**2.0))*np.cos(x[2])*(np.tan(x[4])**2.0)*(x[3]**3.0)
