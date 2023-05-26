@@ -241,8 +241,15 @@ class AckermanModel(ControlAffineODE):
         return x[:2]
 
     def position_derivative(self, t: float, x: np.ndarray, u: np.ndarray):
-        # input u must also contain its derivative information
-        # u (np.ndarray) u.shape = (input_dim, ODE.nderivs-1)
+        '''
+        INPUTS:
+            t (float): time to evaluate derivative at (unused here, only a function of state)
+            x (np.ndarray): numpy array with shape (self.n,), state of robot
+            u (np.ndarray): numpy array with shape (2, d) where u[i, j] is the jth derivative of the ith input
+                            d must be >= 3, we need two derivatives
+        RETURNS:
+            y_d (np.ndarray): a numpy array with self.nderivs derivatives of the position map (including the 0th)
+        '''
         y_d = np.empty((self.p, self.nderivs))
         y_d[:, 0] = x[:2]
 
@@ -284,6 +291,21 @@ class AckermanModel(ControlAffineODE):
 
     def invert_position(self, y, u):
         '''
-        TODO: Solution will have to be computed either analytically or via Newton's method
+        INPUT:
+            y (np.ndarray): numpy array of size (2, d) where y[0, i] is the ith derivative of 0th output
+            u (np.ndarray): numpy array of size (2, d) where u[0, i] is the ith derivative of 0th input
+
+            recall that y[0] = x coordinate of robot
+                        y[1] = y coordinate of robot
+                        u[0] = linear acceleration
+                        u[1] = angular velocity of wheel angle
         '''
-        return None
+        xhat = np.empty((self.n,))
+
+        xhat[0] = y[0, 0]
+        xhat[1] = y[1, 0]
+        xhat[2] = np.arctan2(y[1, 1], y[0, 1])
+        xhat[3] = np.linalg.norm(y[:, 1])  # linear velocity is the norm of the position derivative est
+        xhat[4] = np.arctan2((self.axle_sep)*np.sqrt(y[0, 2]**2.0 + y[1, 2]**2.0 - u[0, 0]**2.0), xhat[3]**2.0)
+
+        return xhat
