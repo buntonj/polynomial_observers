@@ -4,7 +4,6 @@ from moving_polyfit.moving_ls import MultiDimPolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial as P
-from itertools import product
 
 np.random.seed(0)
 verbose = False

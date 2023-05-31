@@ -307,8 +307,6 @@ class AckermanModel(ControlAffineODE):
         xhat[1] = y[1, 0]
         xhat[2] = np.arctan2(y[1, 1], y[0, 1])
         xhat[3] = np.linalg.norm(y[:, 1])  # linear velocity is the norm of the position derivative est
-        # sgn = np.sign(np.cross([y[0, 1], y[1, 1], 0.], [y[0, 2], y[1, 2], 0.])[-1])
-        # xhat[4] = sgn*np.arctan((self.axle_sep/(xhat[3]**2.0))*np.sqrt(max(0., y[0, 2]**2.0 + y[1, 2]**2.0 - u[0, 0]**2.0)))
         xhat[4] = np.arctan(-self.axle_sep*(y[1, 1]*u[0, 0]/(y[0, 1]*xhat[3]**2.0) - y[1, 2]/(xhat[3]*y[0, 1])))
         xhat[4] += np.arctan(self.axle_sep*(u[0, 0]*y[0, 1]/(y[1, 1]*xhat[3]**2.0) - y[0, 2]/(xhat[3]*y[1, 1])))
         xhat[4] /= 2.0
