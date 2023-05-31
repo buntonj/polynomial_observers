@@ -289,9 +289,10 @@ class AckermanModel(ControlAffineODE):
         y_d[1, 4] += np.sin(x[2])*u[0, 2]
         return y_d
 
-    def invert_position(self, y, u):
+    def invert_position(self, t, y, u):
         '''
         INPUT:
+            t (float): relevant evaluation time (unused here)
             y (np.ndarray): numpy array of size (2, d) where y[0, i] is the ith derivative of 0th output
             u (np.ndarray): numpy array of size (2, d) where u[0, i] is the ith derivative of 0th input
 
@@ -306,6 +307,10 @@ class AckermanModel(ControlAffineODE):
         xhat[1] = y[1, 0]
         xhat[2] = np.arctan2(y[1, 1], y[0, 1])
         xhat[3] = np.linalg.norm(y[:, 1])  # linear velocity is the norm of the position derivative est
-        xhat[4] = np.arctan2((self.axle_sep)*np.sqrt(y[0, 2]**2.0 + y[1, 2]**2.0 - u[0, 0]**2.0), xhat[3]**2.0)
+        # sgn = np.sign(np.cross([y[0, 1], y[1, 1], 0.], [y[0, 2], y[1, 2], 0.])[-1])
+        # xhat[4] = sgn*np.arctan((self.axle_sep/(xhat[3]**2.0))*np.sqrt(max(0., y[0, 2]**2.0 + y[1, 2]**2.0 - u[0, 0]**2.0)))
+        xhat[4] = np.arctan(-self.axle_sep*(y[1, 1]*u[0, 0]/(y[0, 1]*xhat[3]**2.0) - y[1, 2]/(xhat[3]*y[0, 1])))
+        xhat[4] += np.arctan(self.axle_sep*(u[0, 0]*y[0, 1]/(y[1, 1]*xhat[3]**2.0) - y[0, 2]/(xhat[3]*y[1, 1])))
+        xhat[4] /= 2.0
 
         return xhat

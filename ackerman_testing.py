@@ -4,14 +4,15 @@ from moving_polyfit.moving_ls import MultiDimPolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial as P
+from itertools import product
 
 np.random.seed(0)
 verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 50  # number of samples in a window
-window_length = 0.04  # number of seconds of trajectory in a single window of data
+N = 100  # number of samples in a window
+window_length = 0.2  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
@@ -22,7 +23,7 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-noise_mag = 0.0  # magnitude of noise to be applied to outputs
+noise_mag = 0.000000  # magnitude of noise to be applied to outputs
 axle_sep = 1.0
 ODE = AckermanModel(axle_sep)
 n = ODE.n  # system state dimension
@@ -97,6 +98,8 @@ y_derivs = np.empty((p, ODE.nderivs, num_integration_steps))
 # setting up arrays for errors and bounds in estimation
 residual = np.empty((p, N, num_sampling_steps))
 bounds = np.zeros((p, d, num_sampling_steps))
+xhat_upper = np.zeros((n, num_sampling_steps))
+xhat_lower = np.zeros((n, num_sampling_steps))
 
 # setting up arrays for variables at sampling instants (could be done with index splicing)
 y_samples = np.empty((p, num_sampling_steps))
@@ -116,6 +119,8 @@ sampling_time = np.zeros((num_sampling_steps,))
 
 # initializing the ODE
 x0 = 5.0*(np.random.rand(n)-0.5)
+x0[2] = np.clip(x0[2], -np.pi, np.pi)
+x0[4] = np.clip(x0[4], -np.pi, np.pi)
 x[:, 0] = x0
 x_samples[:, 0] = x0
 sys = ContinuousTimeSystem(ODE, x0=x0, dt=integration_dt, solver='RK45')
@@ -151,7 +156,7 @@ for t in range(1, num_sampling_steps):
             yhat_poly[:, i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
 
         # compute a state estimate from the derivatives
-        # xhat_poly[:, t] = sys.ode.invert_output(sys.t, yhat_poly[:, t], u[:, t-1])
+        xhat_poly[:, t] = sys.ode.invert_output(sys.t, yhat_poly[:, :, t], u[:, :, t-1])
 
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
@@ -179,20 +184,55 @@ for q in range(d):
         global_bounds[r, q] += (M[r]/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
         bounds[r, q, :] += (M[r]/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
 
-'''
-f4, axs = plt.subplots(nrows=d//4+1, ncols=min(4, n), figsize=(5*min(4, n), 5))
-for i, ax in enumerate(axs.ravel()):
-    ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
-    ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+for t in range(N-1, num_sampling_steps):
+    xhat_upper[0, t] = xhat_poly[0, t] + bounds[0, 0, t]
+    xhat_lower[0, t] = xhat_poly[0, t] - bounds[0, 0, t]
+
+    xhat_upper[1, t] = xhat_poly[1, t] + bounds[1, 0, t]
+    xhat_lower[1, t] = xhat_poly[1, t] - bounds[1, 0, t]
+
+    xhat_upper[2, t] = np.arctan2(yhat_poly[1, 1, t] + bounds[1, 1, t], yhat_poly[0, 1, t] - bounds[0, 1, t])
+    xhat_lower[2, t] = np.arctan2(yhat_poly[1, 1, t] - bounds[1, 1, t], yhat_poly[0, 1, t] + bounds[0, 1, t])
+
+    xhat_upper[3, t] = xhat_poly[3, t] + np.linalg.norm(bounds[:2, 1, t])
+    xhat_lower[3, t] = xhat_poly[3, t] - np.linalg.norm(bounds[:2, 1, t])
+
+    # this step does an exhaustive search through upper and lower bound combinations for the last component
+    # it's not ideal but requires 16 computations in this case
+    yhat_poly_ul = [yhat_poly[:, :4, t] - bounds[:, :, t], yhat_poly[:, :4, t] + bounds[:, :, t]]
+    lb = np.inf
+    ub = -np.inf
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                for l in range(2):
+                    test = yhat_poly[:, :, t].copy()
+                    test[0, 1] = yhat_poly_ul[i][0, 1].copy()
+                    test[1, 1] = yhat_poly_ul[j][1, 1].copy()
+                    test[0, 2] = yhat_poly_ul[k][0, 2].copy()
+                    test[1, 2] = yhat_poly_ul[l][1, 2].copy()
+                    val = sys.ode.invert_output(0.0, test, u[:, :, t-1])[4]
+                    lb = min(lb, val)
+                    ub = max(ub, val)
+    xhat_lower[4, t] = lb
+    xhat_upper[4, t] = ub
+
+
+f4, axs = plt.subplots(nrows=int(np.ceil(n/4)), ncols=min(4, n), figsize=(5*min(4, n), 5))
+for i in range(n):
+    ax = axs.ravel()[i]
+    ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
+    ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
+    ax.fill_between(sampling_time[N:], xhat_lower[i, N:], xhat_upper[i, N:], color='red', alpha=0.5, zorder=-1)
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i}](t)')
     ax.legend()
     ax.grid()
 f4.tight_layout()
-'''
 
-gridrows = int(np.ceil(d//4))
+
+gridrows = int(np.ceil(d/4))
 gridcols = min(4, d)
 size = (5*gridcols, 5)
 
@@ -207,7 +247,7 @@ for q in range(p):
                 linestyle='dashed', label='poly estimate')
         ax.plot(integration_time, y_derivs[q, i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y^({i})_({q})(t)')
+        ax.set_ylabel(f'y_{q}^({i})(t)')
         ax.legend()
         ax.grid()
     f5.tight_layout()
@@ -224,7 +264,7 @@ for q in range(p):
         ax.plot(sampling_time[N:], bounds[q, i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
         # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y^({i}))({q})(t)')
+        ax.set_ylabel(f'y_{q}^({i}))(t)')
         ax.legend()
         ax.grid()
     f6.tight_layout()
