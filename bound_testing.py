@@ -10,8 +10,8 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 50  # number of samples in a window
-window_length = 0.04  # number of seconds of trajectory in a single window of data
+N = 10  # number of samples in a window
+window_length = 0.2  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
@@ -25,7 +25,7 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
-noise_mag = 0.001  # magnitude of noise to be applied to outputs
+noise_mag = 0.01  # magnitude of noise to be applied to outputs
 
 ODE = LorenzSystem()
 n = ODE.n
@@ -52,16 +52,33 @@ d = ODE.nderivs-1  # degree of estimation polynomial
 l_bound = np.zeros((N, d))
 
 # the theory allows us to pick any subset of (at least) d + 1 points containing the evaluation point.
-# for simplicity, here we default to the last data points.
+# we parameterize this by choosing an index jumping size delta
 num_t_points = d + 1
-eval_time = (N-1)*sampling_dt
-l_times = np.linspace((N-num_t_points)*sampling_dt, N*sampling_dt, num_t_points, endpoint=False)
+delay = N // 2
+eval_time = (N-1-delay)*sampling_dt  # (N-1)*sampling_dt
+window_times = np.linspace(0., N*sampling_dt, N, endpoint=False)
+
+# TODO: OPTIMIZE DELTA HERE USING MATH
+delta = 1
+
+if num_t_points > N/delta:
+    raise ValueError(f"Delta ({delta}) invalid for window size ({N}). ({N}/{delta} = {N/delta} < {num_t_points})")
+
+# for index slicing into the time arrays
+maxstart = N-1-num_t_points*delta
+minstart = 0
+start = np.clip((N-1) - delay - delta*(num_t_points//2), minstart, maxstart)
+l_indices = np.full((num_t_points,), 1)
+for i in range(num_t_points):
+    l_indices[i] = start + i*delta
+
+l_times = window_times[l_indices]  # pull the subset of chosen time indices
 verbose_lagrange = False  # to see computation details of lagrange polynomial construction/derivatives
 
 for i in range(num_t_points):
     # build the lagrange polynomial, which is zero at all evaluation samples except one
     evals = np.zeros(num_t_points)
-    evals[-(1+i)] = 1.0  # we are choosing the data points that are closest to our evaluation point
+    evals[i] = 1.0  # we are choosing the data points that are closest to our evaluation point
     l_i = P.fit(l_times, evals, d)
 
     # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
@@ -71,9 +88,9 @@ for i in range(num_t_points):
 
     # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
     for q in range(d):
-        l_bound[-(1+i), q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
+        l_bound[l_indices[i], q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
         if verbose_lagrange:
-            print(f'|l_{num_t_points-i}^({q})(t)|: {l_bound[-(1+i), q]}')  # for an idea of the scale of each term
+            print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q]}')  # for an idea of the scale of each term
 
 
 poly_estimator = PolyEstimator(d, N, sampling_dt)
@@ -135,19 +152,19 @@ for t in range(1, num_sampling_steps):
 
     if t >= N-1:
         # fit polynomial, save residuals
-        theta_poly[:, t] = poly_estimator.fit(y_samples[0, t-N+1:t+1])
-        residual[:, t] = poly_estimator.residuals
+        theta_poly[:, t-delay] = poly_estimator.fit(y_samples[0, t-N+1:t+1])
+        residual[:, t-delay] = poly_estimator.residuals
 
         # estimate with polynomial derivatives at endpoint
         for i in range(d+1):
-            yhat_poly[i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
+            yhat_poly[i, t-delay] = poly_estimator.differentiate(eval_time, i)
 
         # compute a state estimate from the derivatives
-        xhat_poly[:, t] = sys.ode.invert_output(sys.t, yhat_poly[:, t], u[:, t-1])
+        xhat_poly[:, t-delay] = sys.ode.invert_output(sys.t, yhat_poly[:, t-delay], u[:, t-1-delay])
 
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
-            bounds[q, t] = np.dot(residual[:, t] + np.abs(noise_samples[:, t-N+1:t+1]), l_bound[:, q])
+            bounds[q, t-delay] = np.dot(residual[:, t-delay] + np.abs(noise_samples[:, t-N+1:t+1]), l_bound[:, q])
 
     else:
         theta_poly[:, t] = 0.0
@@ -165,13 +182,17 @@ for q in range(d):
     #                                                     np.linspace(0.0, (N-1)*sampling_dt, N, endpoint=True)**(d+1))
     global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
     global_bounds[q] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
-    bounds[q, :] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
+
+    # the factorial expression is equivalent to math.comb(d, max(0, q-1))
+    comb = np.math.factorial(d)//(np.math.factorial(d-q+1)*np.math.factorial(max(0, q-1)))
+    bounds[q, :] += M*comb*((delta*sampling_dt)**(d-q+1))
+    #  bounds[q, :] += (M/(np.math.factorial(d-q+1)))*(((q+1)*delta*sampling_dt)**(d-q+1))
 
 f4, axs = plt.subplots(nrows=d//4+1, ncols=min(4, n), figsize=(5*min(4, n), 5))
 for i, ax in enumerate(axs.ravel()):
     ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
-    ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
+    ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i}](t)')
     ax.legend()
@@ -185,8 +206,8 @@ for i, ax in enumerate(axs2.ravel()):
                     color='red', alpha=0.5, zorder=-1)
     ax.scatter(sampling_time[N:], yhat_poly[i, N:], color='red', marker='.')
     # ax.errorbar(sampling_time[N:], yhat_poly[i, N:], yerr=bounds[i, N:], color='red')
-    ax.plot(sampling_time[N:], yhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
+    ax.plot(sampling_time[N:], yhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'y^({i})(t)')
     ax.legend()
@@ -200,8 +221,8 @@ for i, ax in enumerate(axs3.ravel()):
             c='red', label='poly error')
     ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds[i, N:],
                     alpha=0.5, zorder=-1)
-    ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[i], linewidth=2.0,
-            c='black', label='global bound')
+    # ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[i], linewidth=2.0,
+    #        c='black', label='global bound')
     ax.plot(sampling_time[N:], bounds[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
     # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     ax.set_xlabel('time (s)')
