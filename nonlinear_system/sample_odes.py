@@ -193,11 +193,12 @@ class TwoDimExample(ControlAffineODE):
 
 
 class AckermanModel(ControlAffineODE):
-    def __init__(self, axle_sep: float, output_fn=None, output_derivative=None):
+    def __init__(self, axle_sep: float, wheel_sep: float, output_fn=None, output_derivative=None):
         '''
         axle_sep (float): the distance between the front and rear axles.
         '''
         self.axle_sep = axle_sep
+        self.wheel_sep = wheel_sep
 
         if output_fn is None:
             self.output_fn = self.position

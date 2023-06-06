@@ -3,6 +3,7 @@ from nonlinear_system.sample_odes import AckermanModel
 from moving_polyfit.moving_ls import MultiDimPolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle, FancyBboxPatch
 from numpy.polynomial import Polynomial as P
 
 np.random.seed(0)
@@ -10,8 +11,8 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 100  # number of samples in a window
-window_length = 0.2  # number of seconds of trajectory in a single window of data
+N = 101  # number of samples in a window
+window_length = 0.5  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
@@ -22,9 +23,10 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-noise_mag = 0.000000  # magnitude of noise to be applied to outputs
-axle_sep = 1.0
-ODE = AckermanModel(axle_sep)
+noise_mag = 0.0001  # magnitude of noise to be applied to outputs
+axle_sep = 0.5
+wheel_sep = 0.5*axle_sep
+ODE = AckermanModel(axle_sep, wheel_sep)
 n = ODE.n  # system state dimension
 m = ODE.m  # control input dimension
 p = ODE.p  # output dimension
@@ -35,18 +37,23 @@ def noise_generator(t: float, mag: float, p: int) -> np.ndarray:
     return mag*(np.random.rand(p)-0.5)
 
 
+def wrap_angle(theta: float) -> float:
+    return (theta + np.pi) % (2 * np.pi) - np.pi
+
+
 def control_input(t, y, x=None) -> np.ndarray:
     # if the system has control inputs, we can calculate them here with time-varying output or state feedback
     f = 1.0
+    mag = 1.0
     u = np.zeros((2, 3))
     # acceleration and its derivatives
-    u[0, 0] = 0.01
+    u[0, 0] = 0.0
     u[0, 1] = 0.0
     u[0, 2] = 0.0
 
-    u[1, 0] = np.cos(f*t)
-    u[1, 1] = -f*np.sin(f*t)
-    u[1, 2] = -(f**2.0)*np.cos(f*t)
+    # u[1, 0] = mag*np.cos(f*t)
+    # u[1, 1] = -f*mag*np.sin(f*t)
+    # u[1, 2] = -(f**2.0)*mag*np.cos(f*t)
     return u
 
 
@@ -60,16 +67,33 @@ d = ODE.nderivs-1  # degree of estimation polynomial
 l_bound = np.zeros((N, d))
 
 # the theory allows us to pick any subset of (at least) d + 1 points containing the evaluation point.
-# for simplicity, here we default to the last data points.
+# we parameterize this by choosing an index jumping size delta
 num_t_points = d + 1
-eval_time = (N-1)*sampling_dt
-l_times = np.linspace((N-num_t_points)*sampling_dt, N*sampling_dt, num_t_points, endpoint=False)
+delay = N // 2
+eval_time = (N-1-delay)*sampling_dt  # (N-1)*sampling_dt
+window_times = np.linspace(0., N*sampling_dt, N, endpoint=False)
+
+# TODO: OPTIMIZE DELTA HERE USING MATH
+delta = 15
+
+if num_t_points > N/delta:
+    raise ValueError(f"Delta ({delta}) invalid for window size ({N}). ({N}/{delta} = {N/delta} < {num_t_points})")
+
+# for index slicing into the time arrays
+maxstart = N-1-num_t_points*delta
+minstart = 0
+start = np.clip((N-1) - delay - delta*(num_t_points//2), minstart, maxstart)
+l_indices = np.full((num_t_points,), 1)
+for i in range(num_t_points):
+    l_indices[i] = start + i*delta
+
+l_times = window_times[l_indices]  # pull the subset of chosen time indices
 verbose_lagrange = False  # to see computation details of lagrange polynomial construction/derivatives
 
 for i in range(num_t_points):
     # build the lagrange polynomial, which is zero at all evaluation samples except one
     evals = np.zeros(num_t_points)
-    evals[-(1+i)] = 1.0  # we are choosing the data points that are closest to our evaluation point
+    evals[i] = 1.0  # we are choosing the data points that are closest to our evaluation point
     l_i = P.fit(l_times, evals, d)
 
     # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
@@ -79,9 +103,9 @@ for i in range(num_t_points):
 
     # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
     for q in range(d):
-        l_bound[-(1+i), q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
+        l_bound[l_indices[i], q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
         if verbose_lagrange:
-            print(f'|l_{num_t_points-i}^({q})(t)|: {l_bound[-(1+i), q]}')  # for an idea of the scale of each term
+            print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q]}')  # for an idea of the scale of each term
 
 
 poly_estimator = MultiDimPolyEstimator(p, d, N, sampling_dt)
@@ -119,7 +143,7 @@ sampling_time = np.zeros((num_sampling_steps,))
 # initializing the ODE
 x0 = 5.0*(np.random.rand(n)-0.5)
 x0[2] = np.clip(x0[2], -np.pi, np.pi)
-x0[4] = np.clip(x0[4], -np.pi, np.pi)
+x0[4] = np.pi/4.0  # np.clip(x0[4], -np.pi, np.pi)
 x[:, 0] = x0
 x_samples[:, 0] = x0
 sys = ContinuousTimeSystem(ODE, x0=x0, dt=integration_dt, solver='RK45')
@@ -135,32 +159,35 @@ for t in range(1, num_sampling_steps):
         # compute the right "in between" index
         idx = (t-1)*integration_per_sample + i
         x[:, idx], y[:, idx] = sys.step(u[:, 0, t-1])  # stepping only requires input value
+        x[2, idx], x[4, idx] = wrap_angle(x[2, idx]), wrap_angle(x[4, idx])  # manually wrapping angles
+        # TODO: fix angle wrapping in CT SYSTEM object
         y_derivs[:, :, idx] = sys.ode.output_derivative(sys.t, sys.x, u[:, :, t-1])  # output derivative ground truth
         integration_time[idx] = sys.t
 
     # sample the system
     sampling_time[t] = sys.t
     y_samples[:, t], x_samples[:, t] = sys.y, sys.x
+    x_samples[2, t], x_samples[4, t] = wrap_angle(x_samples[2, t]), wrap_angle(x_samples[4, t])
     noise_samples[:, t] = noise_generator(t, noise_mag, p)  # generate some noise
     y_samples[:, t] += noise_samples[:, t]  # add it to the signal
     y_derivs_samples[:, :, t] = sys.ode.output_derivative(sys.t, sys.x, u[:, :, t-1])
 
     if t >= N-1:
         # fit polynomial, save residuals
-        theta_poly[:, :, t] = poly_estimator.fit(y_samples[:, t-N+1:t+1])
-        residual[:, :, t] = poly_estimator.residuals
+        theta_poly[:, :, t-delay] = poly_estimator.fit(y_samples[:, t-N+1:t+1])
+        residual[:, :, t-delay] = poly_estimator.residuals
 
         # estimate with polynomial derivatives at endpoint
         for i in range(d+1):
-            yhat_poly[:, i, t] = poly_estimator.differentiate((N-1)*sampling_dt, i)
+            yhat_poly[:, i, t-delay] = poly_estimator.differentiate(eval_time, i)
 
         # compute a state estimate from the derivatives
-        xhat_poly[:, t] = sys.ode.invert_output(sys.t, yhat_poly[:, :, t], u[:, :, t-1])
+        xhat_poly[:, t-delay] = sys.ode.invert_output(sys.t, yhat_poly[:, :, t-delay], u[:, :, t-1-delay])
 
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
             for r in range(p):
-                bounds[r, q, t] = np.dot(np.abs(residual[r, :, t]) + np.abs(noise_samples[r, t-N+1:t+1]), l_bound[:, q])
+                bounds[r, q, t-delay] = np.dot(np.abs(residual[r, :, t-delay]) + np.abs(noise_samples[r, t-N+1:t+1]), l_bound[:, q])
 
     else:
         theta_poly[:, :, t] = 0.0
@@ -181,7 +208,8 @@ for q in range(d):
         global_bounds[r, q] = (M[r]/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))
         global_bounds *= np.max(l_bound[:, q])
         global_bounds[r, q] += (M[r]/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
-        bounds[r, q, :] += (M[r]/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
+        comb = np.math.factorial(d)//(np.math.factorial(d-q+1)*np.math.factorial(max(0, q-1)))
+        bounds[r, q, :] += M[r]*comb*((delta*sampling_dt)**(d-q+1))
 
 for t in range(N-1, num_sampling_steps):
     xhat_upper[0, t] = xhat_poly[0, t] + bounds[0, 0, t]
@@ -258,8 +286,8 @@ for q in range(p):
                 c='red', label='poly error')
         ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds[q, i, N:],
                         alpha=0.5, zorder=-1)
-        ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[q, i], linewidth=2.0,
-                c='black', label='global bound')
+        # ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[q, i], linewidth=2.0,
+        #         c='black', label='global bound')
         ax.plot(sampling_time[N:], bounds[q, i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
         # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
@@ -267,5 +295,6 @@ for q in range(p):
         ax.legend()
         ax.grid()
     f6.tight_layout()
+
 
 plt.show()
