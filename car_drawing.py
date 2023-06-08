@@ -87,6 +87,7 @@ lf_wheel = Rectangle(lf_anchor, wheel_diam, wheel_dep, angle=lf_angle, rotation_
 base_LR_pad = wheel_dep/2.0
 base_UD_pad = -wheel_dep/4.0
 caranchor = (0.0 - wheel_diam/2.0 - base_LR_pad, 0.0 - ODE.wheel_sep/2.0 - wheel_dep/2.0 - base_UD_pad)
+car_zero = vax.scatter(0.0, 0.0, s=20, color='black', marker='x', zorder=10)
 car_len = ODE.axle_sep + wheel_diam + base_LR_pad*2.0
 car_width = ODE.wheel_sep + base_UD_pad*2.0 + wheel_dep
 car_rr = np.array(caranchor)
@@ -102,16 +103,16 @@ car_body = Polygon(car_pts, **car_props)
 
 arrow_props = {'fill': True,
                'color': 'red',
-               'width': 0.1}
+               'width': 0.05}
 heading_bx = 0.25*car_len
 heading_by = 0.0
 heading_len = 0.75*car_len
 heading_vec = Arrow(heading_bx, heading_by, heading_len, 0.0, **arrow_props)
 
 bound_props = {'fill': True,
-               'color': 'blue',
-               'alpha': 0.4,
-               'width': 0.5*heading_len,
+               'color': 'green',
+               'alpha': 0.3,
+               'width': 0.75*heading_len,
                'zorder': -1}
 heading_bound = Wedge((heading_bx, heading_by), heading_len, np.degrees(-np.pi/8), np.degrees(np.pi/8), **bound_props)
 
@@ -121,9 +122,12 @@ pos_props = {'fill': True,
              'zorder': -1}
 unc_x = 0.25
 unc_y = 0.25
-pos_x = x[0, t] - unc_x
-pos_y = x[1, t] - unc_y
+est_x = x[0, t] + 0.01
+est_y = x[1, t] - 0.01
+pos_x = est_x - unc_x
+pos_y = est_y - unc_y
 pos_bound = Rectangle((pos_x, pos_y), unc_x*2, unc_y*2, **pos_props)
+est_zero = vax.scatter(est_x, est_y, s=20, color='red', marker='x', zorder=15)
 # car_body = Rectangle(caranchor, car_len, car_width, **car_props)
 
 # car_base = PatchCollection([car_body, lr_wheel, rr_wheel], match_original=True)
@@ -191,12 +195,16 @@ def update(i):
     lf_wheel.set_angle(left)
     rf_wheel.set_angle(right)
     trans = mpl.transforms.Affine2D().rotate(x[2, i]) + mpl.transforms.Affine2D().translate(x[0, i], x[1, i]) + vax.transData
+    car_zero.set_offsets([x[0, i], x[1, i]])
+    est_x = x[0, i] - 0.01
+    est_y = x[1, i] + 0.01
+    est_zero.set_offsets([est_x, est_y])
     car_base.set_transform(trans)
     lf_wheel.set_transform(trans)
     rf_wheel.set_transform(trans)
     heading_vec.set_transform(trans)
     heading_bound.set_transform(trans)
-    heading_bound.set_theta1(np.degrees(-np.pi/8)) 
+    heading_bound.set_theta1(np.degrees(-np.pi/8))
     heading_bound.set_theta2(np.degrees(np.pi/8))
     pos_bound.set_xy((x[0, i]-unc_x, x[1, i]-unc_y))
     pos_bound.set_width(2*unc_x)
@@ -218,5 +226,5 @@ def update(i):
 # Now we need to compute the transformations to apply to each part
 
 anim = FuncAnimation(vfig, update, frames=np.arange(0, num_steps), repeat=True, interval=dt*100, blit=False)
-anim.save('car_test.gif', dpi=300, writer=PillowWriter(fps=5))
+anim.save('car_test.gif', dpi=300, writer=PillowWriter(fps=int(1./dt)))
 plt.show()
