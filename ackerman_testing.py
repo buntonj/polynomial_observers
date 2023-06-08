@@ -25,8 +25,8 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 ##############################################################
 noise_mag = 0.0001  # magnitude of noise to be applied to outputs
 axle_sep = 0.5
-wheel_sep = 0.5*axle_sep
-ODE = AckermanModel(axle_sep, wheel_sep)
+wheel_width = 0.5*axle_sep
+ODE = AckermanModel(axle_sep, wheel_width)
 n = ODE.n  # system state dimension
 m = ODE.m  # control input dimension
 p = ODE.p  # output dimension
