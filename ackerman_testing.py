@@ -3,16 +3,16 @@ from nonlinear_system.sample_odes import AckermanModel
 from moving_polyfit.moving_ls import MultiDimPolyEstimator
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, FancyBboxPatch
 from numpy.polynomial import Polynomial as P
+import pickle
 
 np.random.seed(0)
 verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 101  # number of samples in a window
-window_length = 0.5  # number of seconds of trajectory in a single window of data
+N = 51  # number of samples in a window
+window_length = 0.75  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
@@ -23,9 +23,9 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-noise_mag = 0.0001  # magnitude of noise to be applied to outputs
+noise_mag = 0.000001  # magnitude of noise to be applied to outputs
 axle_sep = 0.5
-wheel_width = 0.5*axle_sep
+wheel_width = 0.6*axle_sep
 ODE = AckermanModel(axle_sep, wheel_width)
 n = ODE.n  # system state dimension
 m = ODE.m  # control input dimension
@@ -43,17 +43,17 @@ def wrap_angle(theta: float) -> float:
 
 def control_input(t, y, x=None) -> np.ndarray:
     # if the system has control inputs, we can calculate them here with time-varying output or state feedback
-    f = 1.0
+    f = 2.0
     mag = 1.0
     u = np.zeros((2, 3))
     # acceleration and its derivatives
-    u[0, 0] = 0.0
+    u[0, 0] = 0.1
     u[0, 1] = 0.0
     u[0, 2] = 0.0
 
-    # u[1, 0] = mag*np.cos(f*t)
-    # u[1, 1] = -f*mag*np.sin(f*t)
-    # u[1, 2] = -(f**2.0)*mag*np.cos(f*t)
+    u[1, 0] = mag*np.cos(f*t)
+    u[1, 1] = -f*mag*np.sin(f*t)
+    u[1, 2] = -(f**2.0)*mag*np.cos(f*t)
     return u
 
 
@@ -74,7 +74,7 @@ eval_time = (N-1-delay)*sampling_dt  # (N-1)*sampling_dt
 window_times = np.linspace(0., N*sampling_dt, N, endpoint=False)
 
 # TODO: OPTIMIZE DELTA HERE USING MATH
-delta = 15
+delta = 9
 
 if num_t_points > N/delta:
     raise ValueError(f"Delta ({delta}) invalid for window size ({N}). ({N}/{delta} = {N/delta} < {num_t_points})")
@@ -211,7 +211,7 @@ for q in range(d):
         comb = np.math.factorial(d)//(np.math.factorial(d-q+1)*np.math.factorial(max(0, q-1)))
         bounds[r, q, :] += M[r]*comb*((delta*sampling_dt)**(d-q+1))
 
-for t in range(N-1, num_sampling_steps):
+for t in range(N-1-delay, num_sampling_steps):
     xhat_upper[0, t] = xhat_poly[0, t] + bounds[0, 0, t]
     xhat_lower[0, t] = xhat_poly[0, t] - bounds[0, 0, t]
 
@@ -243,6 +243,21 @@ for t in range(N-1, num_sampling_steps):
                     ub = max(ub, val)
     xhat_lower[4, t] = lb
     xhat_upper[4, t] = ub
+
+# SAVING THE DATA HERE
+savedata = {'x': x_samples,
+            'xhat': xhat_poly,
+            'xhat_lower': xhat_lower,
+            'xhat_upper': xhat_upper,
+            'sim_params': {'dt': sampling_dt,
+                           'num_steps': num_sampling_steps,
+                           'window_len': N,
+                           'axle_sep': axle_sep,
+                           'wheel_sep': wheel_width,
+                           'delay': delay}}
+
+filename = './tmp/last_run.p'
+pickle.dump(savedata, open(filename, 'wb'))
 
 
 f4, axs = plt.subplots(nrows=int(np.ceil(n/4)), ncols=min(4, n), figsize=(5*min(4, n), 5))
