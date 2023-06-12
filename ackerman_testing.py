@@ -187,7 +187,8 @@ for t in range(1, num_sampling_steps):
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
             for r in range(p):
-                bounds[r, q, t-delay] = np.dot(np.abs(residual[r, :, t-delay]) + np.abs(noise_samples[r, t-N+1:t+1]), l_bound[:, q])
+                bounds[r, q, t-delay] = np.dot(np.abs(residual[r, :, t-delay]) + np.abs(noise_samples[r, t-N+1:t+1]),
+                                               l_bound[:, q])
 
     else:
         theta_poly[:, :, t] = 0.0

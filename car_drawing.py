@@ -2,7 +2,7 @@ import pickle
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle, Polygon, Arrow, Wedge
+from matplotlib.patches import Rectangle, Polygon, Wedge
 from matplotlib.collections import PatchCollection
 from matplotlib.animation import FuncAnimation, PillowWriter
 
@@ -44,6 +44,7 @@ def compute_lr_angles(phi: float) -> float:
     right = np.degrees(np.arctan2(2.0*axle_sep*np.sin(phi),
                                   2*axle_sep*np.cos(phi)+np.sign(phi)*wheel_sep*np.sin(phi)))
     return left, right
+
 
 '''
 axle_sep = 0.5
@@ -116,8 +117,8 @@ car_props = {'fill': True,
 car_body = Polygon(car_pts, **car_props)
 
 heading_props = {'color': 'red',
-               'zorder': 2,
-               'lw': 1}
+                 'zorder': 2,
+                 'lw': 1}
 heading_bx = 0.25*car_len
 heading_by = 0.0
 heading_len = car_len
@@ -133,7 +134,8 @@ bound_props = {'fill': True,
                'color': 'green',
                'alpha': 0.3,
                'zorder': -1}
-heading_bound = Wedge((heading_bx, heading_by), heading_len, np.degrees(xhat_lower[2, t]-xhat[2, t]), np.degrees(xhat_upper[2, t]-xhat[2, t]), **bound_props)
+heading_bound = Wedge((heading_bx, heading_by), heading_len, np.degrees(xhat_lower[2, t]-xhat[2, t]),
+                      np.degrees(xhat_upper[2, t]-xhat[2, t]), **bound_props)
 
 pos_props = {'fill': True,
              'color': 'green',
@@ -145,7 +147,8 @@ est_x = xhat[0, t]
 est_y = xhat[1, t]
 pos_x = xhat_lower[0, t]
 pos_y = xhat_lower[1, t]
-pos_bound = Rectangle((pos_x, pos_y), np.abs(xhat_upper[0, t] - xhat_lower[0, t]), np.abs(xhat_upper[1, t] - xhat_upper[1, t]), **pos_props)
+pos_bound = Rectangle((pos_x, pos_y), np.abs(xhat_upper[0, t] - xhat_lower[0, t]),
+                      np.abs(xhat_upper[1, t] - xhat_upper[1, t]), **pos_props)
 est_zero = vax.scatter(est_x, est_y, s=20, color='red', marker='x', zorder=15)
 
 trans = mpl.transforms.Affine2D().rotate(x[2, 0]).translate(x[0, 0], x[1, 0]) + vax.transData
@@ -173,7 +176,8 @@ steer_rad = 0.5
 true_phi_line, = stax.plot([x[4, t], x[4, t]], [0., steer_rad], linewidth=1, c='black')
 est_phi = xhat[4, t]
 est_phi_line, = stax.plot([est_phi, est_phi], [0, steer_rad], linewidth=1, c='red')
-steer_bound = Rectangle((xhat_lower[4, t], 0.0), xhat_upper[4, t] - xhat_lower[4, t], 3*steer_rad, color='green', alpha=0.3, zorder=-1)
+steer_bound = Rectangle((xhat_lower[4, t], 0.0), xhat_upper[4, t] - xhat_lower[4, t],
+                        3*steer_rad, color='green', alpha=0.3, zorder=-1)
 stax.add_patch(steer_bound)
 stax.set_aspect('equal')
 stax.set_theta_zero_location("N")
@@ -192,7 +196,8 @@ ht = 0.5*bar_ht
 vmax = 1.2*np.max(xhat[3, :])
 true_vel_line, = velax.plot([x[3, t], x[3, t]], [0.0, bar_ht], color='black', lw=2)
 est_vel_line, = velax.plot([est_vel, est_vel], [0.0, bar_ht], color='red', lw=2)
-vel_bound = Rectangle((xhat_lower[3, t], 0.0), xhat_upper[3, t]-xhat_lower[3, t], bar_ht, alpha=0.3, color='green', zorder=-1)
+vel_bound = Rectangle((xhat_lower[3, t], 0.0), xhat_upper[3, t]-xhat_lower[3, t], bar_ht,
+                      alpha=0.3, color='green', zorder=-1)
 velax.add_patch(vel_bound)
 velax.set_xlim(0.0, vmax)
 velax.set_ylim(0.0, bar_ht)
@@ -214,7 +219,8 @@ def update(i):
     lf_wheel.set_transform(trans)
     rf_wheel.set_transform(trans)
     heading_vec.set_transform(trans)
-    heading_est.set_data([heading_bx, heading_len*np.cos(xhat[2, i]-x[2, i])], [heading_by, heading_len*np.sin(xhat[2, i] - x[2, i])])
+    heading_est.set_data([heading_bx, heading_len*np.cos(xhat[2, i]-x[2, i])],
+                         [heading_by, heading_len*np.sin(xhat[2, i] - x[2, i])])
     heading_est.set_transform(trans)
     heading_bound.set_transform(trans)
     thetas = np.degrees([xhat_lower[2, i] - xhat[2, i], xhat_upper[2, i] - xhat[2, i]])
@@ -238,7 +244,10 @@ def update(i):
 
 
 # Now we need to compute the transformations to apply to each part
-
-anim = FuncAnimation(vfig, update, frames=np.arange(window_len-delay, num_steps-delay), repeat=True, interval=dt*100, blit=False)
+anim_params = {'repeat': True,
+               'interval': dt*100,
+               'blit': False,
+               'frames': np.arange(window_len-delay, num_steps-delay)}
+anim = FuncAnimation(vfig, update, **anim_params)
 anim.save('car_test.gif', dpi=300, writer=PillowWriter(fps=int(1./dt)))
 plt.show()
