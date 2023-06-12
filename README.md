@@ -13,4 +13,14 @@ The task, then, is to produce an estimate of the output $y(t)$ and its first $d$
 This repository implements a generic nonlinear system python class `ContinuousTimeSystem` that uses the `scipy.integrate.solve_ivp` function to numerically integrate the nonlinear differential equations above.
 The repository also contains a python class `PolyEstimator` for solving the above problem by fitting finite windows of output function evaluations with a polynomial of degree $d$, then differentiating it at a given time $t$.
 
-Some initial testing is in the `testing.py` and `polyfit_testing.py` files.
+The main theoretical contribution is the ability to compute an error bound for this polynomial-based filter in an _online_ fashion.  Typical bounds for observer error are of the input-to-error-state variety, where the observer will (asymptotically) converge to the true state up to some neighborhood, the size of which must be determined offline by (for instance) bounding the magnitude of the expected noise.  In this approach, however, even if the signal sees less noise than this quantity for some time, the convergence guarantee is inflated for _all time_.  A related notion explored in the past is Quasi-ISS or input-to-state-dynamically-stable (ISDS) observers (see, for example [here](http://liberzon.csl.illinois.edu/research/CDC09_0805_MS.pdf), [here](https://ieeexplore.ieee.org/document/1429345), or [here](https://www.sciencedirect.com/science/article/pii/S0167691114002692?fr=RR-2&ref=pdf_download&rr=7d12308868e32a91).  Even these observers, however, need an __estimate of the experienced disturbance/noise__ to function.
+
+Our theory shows that the polynomial fitting residuals (the quantities $y(t) - \hat{y}(t)$ for each of the discrete sample instants $t = t_0, t_1, ... , t_N$) serve as a valid proxy for these disturbance estimates.  As a result, we can use the _online_ polynomial fitting residuals to provide real-time error bounds that grow and shrink depending on the experienced disturbances, nonlinearities, and noise (and the polynomial fit's natural response to them).
+
+In a single picture, the error bounds we get look more like this, for a basic bicycle/Ackerman steering model:
+
+<img src="https://github.com/buntonj/polynomial_observers/blob/main/car_test.gif" width=600 height=600/>
+
+Here we are estimating the vehicle's position ($x$ and $y$ coordinates), orientation (angle from horizontal, $\theta$), linear velocity magnitude, and steering angle (from straight) from noisy "GPS-style" measurements of just $x-y$ coordinates.  From this output, the steering angle requires computing two derivatives, and is thus the most impacted by noise, but is easier to estimate when the car has high centripetal acceleration (which we see in the error bounds).
+
+Some initial testing is in the `testing.py`, `polyfit_testing.py`, `bound_testing.py` and `ackerman_testing.py` files.
