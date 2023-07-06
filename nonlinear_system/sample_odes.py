@@ -97,6 +97,74 @@ class Integrator(ControlAffineODE):
         return y_d[:self.n]
 
 
+class LTI(ControlAffineODE):
+    def __init__(self, A: np.ndarray, C: np.ndarray, B=None, D=None):
+        '''
+        Continuous-time linear time-invariant system object.  Obeys the ODE:
+
+        xdot = A @ x + B @ u
+
+        y = C @ x + D @ u
+
+        args:
+            A (np.ndarray): a numpy array of shape (n, n) where n is the state dimension
+            C (np.ndarray): a numpy array of shape (p, n) where p is output dimension
+        kwargs:
+            B (np.ndarray): a numpy array of shape (n, m) where m is the input dimension
+            D (np.ndarray): a numpy array of shape (p, m) where m is input and p is output dim
+        '''
+        self.A = A
+        self.B = B
+        self.C = C
+        self.D = D
+
+        state_dim = A.shape[0]
+        output_dim = C.shape[0]
+
+        if self.B is None:
+            ls_g = None
+            input_dim = 0
+        else:
+            ls_g = self.linear_sys_g
+            input_dim = B.shape[1]
+        if self.D is None:
+            output_fn = self.output_noD
+        else:
+            output_fn = self.output
+
+        self.nderivs = state_dim + 1
+        self.uderivs = state_dim
+
+        super().__init__(state_dim, input_dim, output_dim, self.linear_sys_f, ls_g, output_fn)
+
+    def linear_sys_f(self, t: float, x: np.ndarray) -> np.ndarray:
+        return self.A @ x
+
+    def linear_sys_g(self, t: float, x: np.ndarray) -> np.ndarray:
+        return self.B
+
+    def output_noD(self, t: float, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        return self.C @ x
+
+    def output(self, t: float, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        return self.C @ x + self.D @ u
+
+    def output_derivative(self, x, u):
+        y_d = np.zeros((self.nderivs, self.output_dim))
+        y_d[0, :] = self.h(x, u)
+
+        for i in range(1, self.nderivs):
+            for j in range(i):
+                y_d[i, :] += self.C @ np.linalg.matrix_power(self.A, i+1) @ x
+
+        if self.B is not None:
+            for i in range(1, self.nderivs):
+                for j in range(i):
+                    y_d[i, :] += self.C @ np.linalg.matrix_power(self.A, i) @ self.B @ u[:, i-1]
+
+        return y_d
+
+
 class LorenzSystem(ControlAffineODE):
     def __init__(self, sigma=10.0, rho=28.0, beta=8.0/3.0, output_fn=None, output_derivative=None):
         self.sigma = sigma

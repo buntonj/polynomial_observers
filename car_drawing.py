@@ -68,8 +68,12 @@ for i in range(1, num_steps):
 vfig = plt.figure(figsize=(8, 8))
 # gs = mpl.gridspec.GridSpec(6, 6, figure=vfig)
 vax = vfig.add_subplot()
-vax.set_xlim((-4.0, 4.0))
-vax.set_ylim((-4.0, 4.0))
+axes_rad = 4.0
+cx = np.zeros(num_steps+1)
+cy = np.zeros(num_steps+1)
+vax.set_xlim((cx[0] - axes_rad, cx[0] + axes_rad))
+vax.set_ylim((cx[0] - axes_rad, cy[0] + axes_rad))
+vax.grid()
 t = 0
 
 # First, we'll build the car shapes with no transformation applied.
@@ -172,7 +176,7 @@ steer_widget_width = 0.15
 steer_widget_height = 0.15
 
 stax = vfig.add_axes((0.17, 0.2, steer_widget_width, steer_widget_height), projection='polar')
-steer_rad = 0.5
+steer_rad = 5.0
 true_phi_line, = stax.plot([x[4, t], x[4, t]], [0., steer_rad], linewidth=1, c='black')
 est_phi = xhat[4, t]
 est_phi_line, = stax.plot([est_phi, est_phi], [0, steer_rad], linewidth=1, c='red')
@@ -210,6 +214,24 @@ def update(i):
     left, right = compute_lr_angles(x[4, i])
     lf_wheel.set_angle(left)
     rf_wheel.set_angle(right)
+    dxright = x[0, i] - (cx[i] + axes_rad*0.5)
+    dxleft = x[0, i] - (cx[i] - axes_rad*0.5)
+    if dxright > 0:
+        cx[i+1] = cx[i] + dxright
+    elif dxleft < 0:
+        cx[i+1] = cx[i] + dxleft
+    else:
+        cx[i+1] = cx[i]
+    dyright = x[1, i] - (cy[i] + axes_rad*0.5)
+    dyleft = x[1, i] - (cy[i] - axes_rad*0.5)
+    if dyright > 0:
+        cy[i+1] = cy[i] + dyright
+    elif dyleft < 0:
+        cy[i+1] = cy[i] + dyleft
+    else:
+        cy[i+1] = cy[i]
+    vax.set_xlim((cx[i+1] - axes_rad, cx[i+1] + axes_rad))
+    vax.set_ylim((cy[i+1] - axes_rad, cy[i+1] + axes_rad))
     trans = mpl.transforms.Affine2D().rotate(x[2, i]).translate(x[0, i], x[1, i]) + vax.transData
     car_zero.set_offsets([x[0, i], x[1, i]])
     est_x = xhat[0, i]
@@ -223,7 +245,9 @@ def update(i):
                          [heading_by, heading_len*np.sin(xhat[2, i] - x[2, i])])
     heading_est.set_transform(trans)
     heading_bound.set_transform(trans)
+
     thetas = np.degrees([xhat_lower[2, i] - xhat[2, i], xhat_upper[2, i] - xhat[2, i]])
+
     heading_bound.set_theta1(min(thetas))
     heading_bound.set_theta2(max(thetas))
     pos_bound.set_xy((xhat[0, i], xhat[1, i]))
