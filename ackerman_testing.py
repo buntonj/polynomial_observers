@@ -12,18 +12,18 @@ verbose = False
 #                     TIME  PARAMETERS                       #
 ##############################################################
 N = 51  # number of samples in a window
-window_length = 0.75  # number of seconds of trajectory in a single window of data
+window_length = 0.5  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
 integration_dt = sampling_dt/integration_per_sample
-num_sampling_steps = 500  # total number of steps taken in the
+num_sampling_steps = 1000  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-noise_mag = 0.000001  # magnitude of noise to be applied to outputs
+noise_mag = 0.01  # magnitude of noise to be applied to outputs
 axle_sep = 0.5
 wheel_width = 0.6*axle_sep
 ODE = AckermanModel(axle_sep, wheel_width)
@@ -45,15 +45,16 @@ def control_input(t, y, x=None) -> np.ndarray:
     # if the system has control inputs, we can calculate them here with time-varying output or state feedback
     f = 2.0
     mag = 1.0
+    tau = np.pi
     u = np.zeros((2, 3))
     # acceleration and its derivatives
-    u[0, 0] = 0.1
+    u[0, 0] = 0.2
     u[0, 1] = 0.0
     u[0, 2] = 0.0
 
-    u[1, 0] = mag*np.cos(f*t)
-    u[1, 1] = -f*mag*np.sin(f*t)
-    u[1, 2] = -(f**2.0)*mag*np.cos(f*t)
+    u[1, 0] = mag*np.cos(f*(t-tau))
+    u[1, 1] = -f*mag*np.sin(f*(t-tau))
+    u[1, 2] = -(f**2.0)*mag*np.cos(f*(t-tau))
     return u
 
 
@@ -142,8 +143,9 @@ sampling_time = np.zeros((num_sampling_steps,))
 
 # initializing the ODE
 x0 = 5.0*(np.random.rand(n)-0.5)
-x0[2] = np.clip(x0[2], -np.pi, np.pi)
-x0[4] = np.pi/4.0  # np.clip(x0[4], -np.pi, np.pi)
+x0[2] = 0.0  # np.clip(x0[2], -np.pi, np.pi)
+x0[3] = 2.0
+x0[4] = 0.0  # np.pi/4.0  # np.clip(x0[4], -np.pi, np.pi)
 x[:, 0] = x0
 x_samples[:, 0] = x0
 sys = ContinuousTimeSystem(ODE, x0=x0, dt=integration_dt, solver='RK45')
