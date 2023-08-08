@@ -46,7 +46,7 @@ def control_input(t, y, x=None):
 #                   FITTING PARAMETERS                       #
 ##############################################################
 # currently, we set this to one below the max we can explicitly compute (for bound purposes)
-d = ODE.nderivs-1  # degree of estimation polynomial
+d = 3  # ODE.nderivs-1  # degree of estimation polynomial
 
 # this vector will be multiplied with the residuals + noise
 l_bound = np.zeros((N, d))
@@ -180,13 +180,21 @@ global_bounds = np.empty((d,))
 for q in range(d):
     # global_bounds[q] = (M/np.math.factorial(d+1))*np.dot(l_bound[:, q],
     #                                                     np.linspace(0.0, (N-1)*sampling_dt, N, endpoint=True)**(d+1))
-    global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
-    global_bounds[q] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
+    # global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q])
+    # global_bounds[q] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
 
     # the factorial expression is equivalent to math.comb(d, max(0, q-1))
     comb = np.math.factorial(d)//(np.math.factorial(d-q+1)*np.math.factorial(max(0, q-1)))
     bounds[q, :] += M*comb*((delta*sampling_dt)**(d-q+1))
     #  bounds[q, :] += (M/(np.math.factorial(d-q+1)))*(((q+1)*delta*sampling_dt)**(d-q+1))
+
+Ddelta = delay
+Nn = d
+Tt = sampling_dt
+Ssigma = noise_mag
+Ee = M
+
+global_bounds[1] = 3*Ddelta*(Ddelta+1)*Ee*Tt/(4*(2*Ddelta+1)) + 3*Ssigma/(Tt*(2*Ddelta + 1))
 
 f4, axs = plt.subplots(nrows=d//4+1, ncols=min(4, n), figsize=(5*min(4, n), 5))
 for i, ax in enumerate(axs.ravel()):
@@ -199,7 +207,7 @@ for i, ax in enumerate(axs.ravel()):
     ax.grid()
 f4.tight_layout()
 
-f5, axs2 = plt.subplots(nrows=d//4+1, ncols=min(4, n),
+f5, axs2 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
                         figsize=(5*min(4, d), 5))
 for i, ax in enumerate(axs2.ravel()):
     ax.fill_between(sampling_time[N:], yhat_poly[i, N:]-bounds[i, N:], yhat_poly[i, N:]+bounds[i, N:],
@@ -214,16 +222,16 @@ for i, ax in enumerate(axs2.ravel()):
     ax.grid()
 f5.tight_layout()
 
-f6, axs3 = plt.subplots(nrows=d//4+1, ncols=min(4, n),
+f6, axs3 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
                         figsize=(5*min(4, d), 5))
 for i, ax in enumerate(axs3.ravel()):
-    ax.plot(sampling_time[N:], np.abs(yhat_poly[i, N:]-y_derivs_samples[i, N:]), linewidth=2.0,
-            c='red', label='poly error')
+    ax.semilogy(sampling_time[N:], np.abs(yhat_poly[i, N:]-y_derivs_samples[i, N:]), linewidth=2.0,
+                c='red', label='poly error')
     ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds[i, N:],
                     alpha=0.5, zorder=-1)
-    # ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[i], linewidth=2.0,
-    #        c='black', label='global bound')
-    ax.plot(sampling_time[N:], bounds[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
+    ax.semilogy(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[i], linewidth=2.0,
+                c='black', label='global bound')
+    ax.semilogy(sampling_time[N:], bounds[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
     # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'y^({i})(t)')
