@@ -18,6 +18,7 @@ integration_per_sample = 10  # how many integration timesteps should we take bet
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 500  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
+total_time = num_sampling_steps*sampling_dt
 
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
@@ -25,7 +26,7 @@ num_integration_steps = (num_sampling_steps-1)*integration_per_sample
 n = 2  # system state dimension
 m = 1  # control input dimension
 p = 1  # output dimension
-noise_mag = 0.01  # magnitude of noise to be applied to outputs
+noise_mag = 0.5  # magnitude of noise to be applied to outputs
 
 ODE = LorenzSystem()
 n = ODE.n
@@ -34,7 +35,10 @@ p = ODE.p
 
 
 def noise_generator(t: float, mag: float, p: int) -> np.ndarray:
-    return mag*(np.random.rand(p)-0.5)
+    if total_time/3.0 < t and t < 2*total_time/3:
+        return mag*(np.random.rand(p)-0.5)
+    else:
+        return 0
 
 
 def control_input(t, y, x=None):
@@ -146,7 +150,7 @@ for t in range(1, num_sampling_steps):
     # sample the system
     sampling_time[t] = sys.t
     y_samples[0, t], x_samples[:, t] = sys.y, sys.x
-    noise_samples[:, t] = noise_generator(t, noise_mag, p)  # generate some noise
+    noise_samples[:, t] = noise_generator(sampling_time[t], noise_mag, p)  # generate some noise
     y_samples[:, t] += noise_samples[:, t]  # add it to the signal
     y_derivs_samples[:, t] = sys.ode.output_derivative(sys.t, sys.x, u[:, t-1])
 
