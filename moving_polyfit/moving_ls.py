@@ -23,7 +23,7 @@ class PolyEstimator:
 
         # compute and save the fit residuals
         for i in range(y.shape[0]):
-            self.residuals[i] = np.abs(self.polynomial(t[i]) - y[i])
+            self.residuals[i] = y[i] - self.polynomial(t[i])
 
         return self.polynomial.coef
 

@@ -19,11 +19,12 @@ integration_per_sample = 10  # how many integration timesteps should we take bet
 integration_dt = sampling_dt/integration_per_sample
 num_sampling_steps = 1500  # total number of steps taken in the
 num_integration_steps = (num_sampling_steps-1)*integration_per_sample
+total_time = num_sampling_steps*sampling_dt
 
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-noise_mag = 0.025  # magnitude of noise to be applied to outputs
+noise_mag = 0.5  # 0.025  # magnitude of noise to be applied to outputs
 axle_sep = 0.5
 wheel_width = 0.6*axle_sep
 ODE = AckermanModel(axle_sep, wheel_width)
@@ -34,7 +35,10 @@ uderivs = ODE.uderivs  # number of control input derivatives we need to provide
 
 
 def noise_generator(t: float, mag: float, p: int) -> np.ndarray:
-    return mag*(np.random.rand(p)-0.5)
+    if total_time/3.0 < t and t < 2*total_time/3:
+        return mag*(np.random.rand(p)-0.5)
+    else:
+        return 0
 
 
 def wrap_angle(theta: float) -> float:
@@ -179,7 +183,7 @@ for t in range(1, num_sampling_steps):
     sampling_time[t] = sys.t
     y_samples[:, t], x_samples[:, t] = sys.y, sys.x
     x_samples[2, t], x_samples[4, t] = wrap_angle(x_samples[2, t]), wrap_angle(x_samples[4, t])
-    noise_samples[:, t] = noise_generator(t, noise_mag, p)  # generate some noise
+    noise_samples[:, t] = noise_generator(sys.t, noise_mag, p)  # generate some noise
     y_samples[:, t] += noise_samples[:, t]  # add it to the signal
     y_derivs_samples[:, :, t] = sys.ode.output_derivative(sys.t, sys.x, u[:, :, t-1])
 
@@ -271,56 +275,59 @@ savedata = {'x': x_samples,
 filename = './tmp/last_run.p'
 pickle.dump(savedata, open(filename, 'wb'))
 
+gridrows = 2  # int(np.ceil(d/4))
+gridcols = 2  # min(4, d)
+size = (5*gridcols, 5)
+S = N
+E = num_sampling_steps-delay
 
-f4, axs = plt.subplots(nrows=int(np.ceil(n/4)), ncols=min(4, n), figsize=(5*min(4, n), 5))
-for i in range(n):
+f4, axs = plt.subplots(nrows=2, ncols=3, figsize=size)
+for i in range(n-1):
     ax = axs.ravel()[i]
     ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
-    ax.plot(sampling_time[N:], xhat_poly[i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly estimate')
-    ax.fill_between(sampling_time[N:], xhat_lower[i, N:], xhat_upper[i, N:], color='red', alpha=0.5, zorder=-1)
+    ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Polynomial estimate')
+    ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i}](t)')
     ax.legend()
     ax.grid()
+f4.suptitle('State estimation')
 f4.tight_layout()
-
-
-gridrows = int(np.ceil(d/4))
-gridcols = min(4, d)
-size = (5*gridcols, 5)
 
 for q in range(p):
     f5, axs2 = plt.subplots(nrows=gridrows, ncols=gridcols,
                             figsize=size)
     for i, ax in enumerate(axs2.ravel()):
-        ax.fill_between(sampling_time[N:], yhat_poly[q, i, N:]-bounds[q, i, N:], yhat_poly[q, i, N:]+bounds[q, i, N:],
+        ax.fill_between(sampling_time[S:E], yhat_poly[q, i, S:E]-bounds[q, i, S:E], yhat_poly[q, i, S:E]+bounds[q, i, S:E],
                         color='red', alpha=0.5, zorder=-1)
-        ax.scatter(sampling_time[N:], yhat_poly[q, i, N:], color='red', marker='.')
-        ax.plot(sampling_time[N:], yhat_poly[q, i, N:], linewidth=2.0, c='red',
-                linestyle='dashed', label='poly estimate')
+        ax.scatter(sampling_time[S:E], yhat_poly[q, i, S:E], color='red', marker='.')
+        ax.plot(sampling_time[S:E], yhat_poly[q, i, S:E], linewidth=2.0, c='red',
+                linestyle='dashed', label='Polynomial estimate')
         ax.plot(integration_time, y_derivs[q, i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y_{q}^({i})(t)')
+        ax.set_ylabel(f'y_[{q}]'+"'"*i+'(t)')
         ax.legend()
         ax.grid()
+    f5.suptitle(f'y[{q}] Derivative estimation')
     f5.tight_layout()
 
     f6, axs3 = plt.subplots(nrows=gridrows, ncols=gridcols,
                             figsize=size)
     for i, ax in enumerate(axs3.ravel()):
-        ax.plot(sampling_time[N:], np.abs(yhat_poly[q, i, N:]-y_derivs_samples[q, i, N:]), linewidth=2.0,
-                c='red', label='poly error')
-        ax.fill_between(sampling_time[N:], np.zeros_like(sampling_time[N:]), bounds[q, i, N:],
+        ax.semilogy(sampling_time[S:E], np.abs(yhat_poly[q, i, S:E]-y_derivs_samples[q, i, S:E]), linewidth=2.0,
+                c='Blue', label='Polynomial error')
+        ax.fill_between(sampling_time[S:E], np.zeros_like(sampling_time[S:E]), bounds[q, i, S:E],
                         alpha=0.5, zorder=-1)
-        # ax.plot(sampling_time[N:], np.ones_like(sampling_time[N:])*global_bounds[q, i], linewidth=2.0,
-        #         c='black', label='global bound')
-        ax.plot(sampling_time[N:], bounds[q, i, N:], linewidth=2.0, c='red', linestyle='dashed', label='poly bound')
+        ax.semilogy(sampling_time[S:E], np.ones_like(sampling_time[S:E])*global_bounds[q, i], linewidth=2.0,
+                    c='black', label='Offline bound')
+        ax.semilogy(sampling_time[S:E], bounds[q, i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Online bound')
         # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y_{q}^({i}))(t)')
+        ax.set_ylabel(f'y[{q}]'+"'"*i+'(t) error')
         ax.legend()
         ax.grid()
+    f6.suptitle(f'y[{q}] Derivative estimation errors')
     f6.tight_layout()
 
 
