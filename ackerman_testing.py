@@ -24,7 +24,7 @@ total_time = num_sampling_steps*sampling_dt
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-noise_mag = 0.5  # 0.025  # magnitude of noise to be applied to outputs
+noise_mag = 0.075  # 0.025  # magnitude of noise to be applied to outputs
 axle_sep = 0.5
 wheel_width = 0.6*axle_sep
 ODE = AckermanModel(axle_sep, wheel_width)
@@ -36,7 +36,7 @@ uderivs = ODE.uderivs  # number of control input derivatives we need to provide
 
 def noise_generator(t: float, mag: float, p: int) -> np.ndarray:
     if total_time/3.0 < t and t < 2*total_time/3:
-        return mag*(np.random.rand(p)-0.5)
+        return 2*mag*(np.random.rand(p)-0.5)
     else:
         return 0
 
@@ -122,7 +122,7 @@ for delta in range(1, deltas+1):
         for q in range(d):
             l_bound[l_indices[i], q, delta-1] = l_i.deriv(q)(eval_time)  # coefficient for i-th residual in bound
             if verbose_lagrange:
-                print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q, delta-1]}')  # for an idea of the scale of each term
+                print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q, delta-1]}')
 
 poly_estimator = MultiDimPolyEstimator(p, d, N, sampling_dt)
 global_thetas = False  # if true, computes the coefficients in global time rather than local time frames
@@ -293,31 +293,38 @@ S = N
 E = num_sampling_steps-delay
 
 f4, axs = plt.subplots(nrows=2, ncols=3, figsize=size)
-for i in range(n-1):
+for i in range(n):
     ax = axs.ravel()[i]
     ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
-    ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Polynomial estimate')
+    ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red',
+            linestyle='dashed', label='Polynomial estimate')
     ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
     ax.set_xlabel('time (s)')
-    ax.set_ylabel(f'x[{i}](t)')
-    ax.legend()
+    ax.set_ylabel(f'x[{i+1}](t)')
+    # ax.legend()
     ax.grid()
+
+f4.axes[-1].set_axis_off()
 f4.suptitle('State estimation')
+lines_labels = [f4.axes[0].get_legend_handles_labels()]
+lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+f4.axes[-1].legend(lines, labels, loc="center")
 f4.tight_layout()
 
 for q in range(p):
     f5, axs2 = plt.subplots(nrows=gridrows, ncols=gridcols,
                             figsize=size)
     for i, ax in enumerate(axs2.ravel()):
-        ax.fill_between(sampling_time[S:E], yhat_poly[q, i, S:E]-bounds[q, i, S:E], yhat_poly[q, i, S:E]+bounds[q, i, S:E],
+        ax.fill_between(sampling_time[S:E], yhat_poly[q, i, S:E]-bounds[q, i, S:E],
+                        yhat_poly[q, i, S:E]+bounds[q, i, S:E],
                         color='red', alpha=0.5, zorder=-1)
         ax.scatter(sampling_time[S:E], yhat_poly[q, i, S:E], color='red', marker='.')
         ax.plot(sampling_time[S:E], yhat_poly[q, i, S:E], linewidth=2.0, c='red',
                 linestyle='dashed', label='Polynomial estimate')
         ax.plot(integration_time, y_derivs[q, i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y_[{q}]'+"'"*i+'(t)')
+        ax.set_ylabel(f'y_[{q+1}]'+"'"*i+'(t)')
         ax.legend()
         ax.grid()
     f5.suptitle(f'y[{q}] Derivative estimation')
@@ -326,16 +333,17 @@ for q in range(p):
     f6, axs3 = plt.subplots(nrows=gridrows, ncols=gridcols,
                             figsize=size)
     for i, ax in enumerate(axs3.ravel()):
-        ax.semilogy(sampling_time[S:E], np.abs(yhat_poly[q, i, S:E]-y_derivs_samples[q, i, S:E]), linewidth=2.0,
+        ax.plot(sampling_time[S:E], np.abs(yhat_poly[q, i, S:E]-y_derivs_samples[q, i, S:E]), linewidth=2.0,
                 c='Blue', label='Polynomial error')
         ax.fill_between(sampling_time[S:E], np.zeros_like(sampling_time[S:E]), bounds[q, i, S:E],
                         alpha=0.5, zorder=-1)
-        ax.semilogy(sampling_time[S:E], np.ones_like(sampling_time[S:E])*global_bounds[q, i], linewidth=2.0,
-                    c='black', label='Offline bound')
-        ax.semilogy(sampling_time[S:E], bounds[q, i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Online bound')
+        # ax.semilogy(sampling_time[S:E], np.ones_like(sampling_time[S:E])*global_bounds[q, i], linewidth=2.0,
+        #             c='black', label='Offline bound')
+        ax.plot(sampling_time[S:E], bounds[q, i, S:E], linewidth=2.0,
+                c='red', linestyle='dashed', label='Online bound')
         # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y[{q}]'+"'"*i+'(t) error')
+        ax.set_ylabel(f'y[{q+1}]'+"'"*i+'(t) error')
         ax.legend()
         ax.grid()
     f6.suptitle(f'y[{q}] Derivative estimation errors')
