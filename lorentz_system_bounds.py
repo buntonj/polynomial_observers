@@ -10,8 +10,8 @@ verbose = False
 ##############################################################
 #                     TIME  PARAMETERS                       #
 ##############################################################
-N = 11  # number of samples in a window
-window_length = 0.011  # number of seconds of trajectory in a single window of data
+N = 21  # number of samples in a window
+window_length = 0.21  # number of seconds of trajectory in a single window of data
 sampling_dt = window_length/float(N)  # computed sampling timestep
 
 integration_per_sample = 10  # how many integration timesteps should we take between output samples?
@@ -23,7 +23,7 @@ total_time = num_sampling_steps*sampling_dt
 ##############################################################
 #                    SYSTEM PARAMETERS                       #
 ##############################################################
-noise_mag = 1.0  # magnitude of noise to be applied to outputs
+noise_mag = 0.5  # magnitude of noise to be applied to outputs
 
 ODE = LorenzSystem()
 n = ODE.n
@@ -129,7 +129,7 @@ integration_time = np.zeros((num_integration_steps,))
 sampling_time = np.zeros((num_sampling_steps,))
 
 # initializing the ODE
-x0 = 10.0*np.ones(n)  # 2.0*(np.random.rand(n)-0.5)
+x0 = 10.0*(np.random.rand(n)-0.5)
 x[:, 0] = x0
 x_samples[:, 0] = x0
 sys = ContinuousTimeSystem(ODE, x0=x0, dt=integration_dt, solver='RK45')
@@ -170,7 +170,8 @@ for t in range(1, num_sampling_steps):
         xhat_poly[:, t-delay] = sys.ode.invert_output(sys.t, yhat_poly[:, t-delay], u[:, t-1-delay])
 
         # compute a bound on derivative estimation error from residuals
-        noise_vector = np.ones(N,)*noise_mag  # np.abs(noise_samples[:, t-N+1:t+1])
+        noise_vector = np.ones(N,)*noise_mag
+        # noise_vector = np.abs(noise_samples[:, t-N+1:t+1])
         for q in range(d):
             for delta in range(deltas):
                 cand_bounds[q, t-delay, delta] = np.abs(np.dot(residual[:, t-delay], l_bound[:, q, delta]))
@@ -188,9 +189,8 @@ for t in range(1, num_sampling_steps):
 M = np.max(np.abs(y_derivs[min(ODE.nderivs-1, d), :]))
 global_bounds = np.empty((d,))
 for q in range(d):
-    global_bounds[q] = (M/np.math.factorial(d+1))*np.dot(l_bound[:, q, 0],
-                                                         np.linspace(0.0, (N-1)*sampling_dt, N, endpoint=True)**(d+1) + noise_vector)
-    global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q, 0])
+    global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q, -1])
+    global_bounds[q] += np.linalg.norm(noise_vector, 1)*np.max(l_bound[:, q, -1])
     global_bounds[q] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
 
     # the factorial expression is equivalent to math.comb(d, max(0, q-1))
@@ -241,6 +241,8 @@ for i, ax in enumerate(axs.ravel()):
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i+1}](t)')
     ax.legend()
+    if i==2:
+        ax.set_ylim([-175, 175])
     ax.grid()
 f4.suptitle('State estimates')
 f4.tight_layout()
@@ -303,6 +305,8 @@ for i, ax in enumerate(axs4.ravel()):
     # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i+1}] error')
+    if i == 2:
+        ax.set_ylim(bottom=-13, top=300)
     ax.legend()
     ax.grid()
 f7.suptitle('State estimation error')

@@ -85,40 +85,44 @@ delay = N // 2
 eval_time = (N-1-delay)*sampling_dt  # (N-1)*sampling_dt
 window_times = np.linspace(0., N*sampling_dt, N, endpoint=False)
 
+
 # TODO: OPTIMIZE DELTA HERE USING MATH
-delta = 9
+deltas = N//num_t_points
+print(f'Optimizing over delta up to: {deltas}')
+# this vector will be multiplied with the residuals + noise
+l_bound = np.zeros((N, d, deltas))
 
-if num_t_points > N/delta:
-    raise ValueError(f"Delta ({delta}) invalid for window size ({N}). ({N}/{delta} = {N/delta} < {num_t_points})")
+if num_t_points > N/deltas:
+    raise ValueError(f"Delta ({deltas}) invalid for window size ({N}). ({N}/{deltas} = {N/deltas} < {num_t_points})")
 
-# for index slicing into the time arrays
-maxstart = N-1-num_t_points*delta
-minstart = 0
-start = np.clip((N-1) - delay - delta*(num_t_points//2), minstart, maxstart)
-l_indices = np.full((num_t_points,), 1)
-for i in range(num_t_points):
-    l_indices[i] = start + i*delta
-
-l_times = window_times[l_indices]  # pull the subset of chosen time indices
 verbose_lagrange = False  # to see computation details of lagrange polynomial construction/derivatives
 
-for i in range(num_t_points):
-    # build the lagrange polynomial, which is zero at all evaluation samples except one
-    evals = np.zeros(num_t_points)
-    evals[i] = 1.0  # we are choosing the data points that are closest to our evaluation point
-    l_i = P.fit(l_times, evals, d)
+for delta in range(1, deltas+1):
+    # for index slicing into the time arrays
+    maxstart = N-1-num_t_points*delta
+    minstart = 0
+    start = np.clip((N-1) - delay - delta*(num_t_points//2), minstart, maxstart)
+    l_indices = np.full((num_t_points,), 1)
+    for i in range(num_t_points):
+        l_indices[i] = start + i*delta
+    l_times = window_times[l_indices]  # pull the subset of chosen time indices
 
-    # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
-    if verbose_lagrange:
-        for j in range(num_t_points):
-            print(f't = {l_times[j]:.3f}, l_i(t) = {l_i(l_times[j])}')
+    for i in range(num_t_points):
+        # build the lagrange polynomial, which is zero at all evaluation samples except one
+        evals = np.zeros(num_t_points)
+        evals[i] = 1.0  # we are choosing the data points that are closest to our evaluation point
+        l_i = P.fit(l_times, evals, d)
 
-    # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
-    for q in range(d):
-        l_bound[l_indices[i], q] = np.abs(l_i.deriv(q)(eval_time))  # coefficient for i-th residual in bound
+        # to checking that you built the right lagrange polynomial, evaluate it at the relevant points
         if verbose_lagrange:
-            print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q]}')  # for an idea of the scale of each term
+            for j in range(num_t_points):
+                print(f't = {l_times[j]:.3f}, l_i(t) = {l_i(l_times[j])}')
 
+        # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
+        for q in range(d):
+            l_bound[l_indices[i], q, delta-1] = l_i.deriv(q)(eval_time)  # coefficient for i-th residual in bound
+            if verbose_lagrange:
+                print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q, delta-1]}')  # for an idea of the scale of each term
 
 poly_estimator = MultiDimPolyEstimator(p, d, N, sampling_dt)
 global_thetas = False  # if true, computes the coefficients in global time rather than local time frames
@@ -132,6 +136,7 @@ y_derivs = np.empty((p, ODE.nderivs, num_integration_steps))
 
 # setting up arrays for errors and bounds in estimation
 residual = np.empty((p, N, num_sampling_steps))
+cand_bounds = np.zeros((p, d, num_sampling_steps, deltas))
 bounds = np.zeros((p, d, num_sampling_steps))
 xhat_upper = np.zeros((n, num_sampling_steps))
 xhat_lower = np.zeros((n, num_sampling_steps))
@@ -202,8 +207,11 @@ for t in range(1, num_sampling_steps):
         # compute a bound on derivative estimation error from residuals
         for q in range(d):
             for r in range(p):
-                bounds[r, q, t-delay] = np.dot(np.abs(residual[r, :, t-delay]) + np.abs(noise_samples[r, t-N+1:t+1]),
-                                               l_bound[:, q])
+                noise_vector = np.ones(N,)*noise_mag
+                # noise_vector = np.abs(noise_samples[r, t-N+1:t+1])
+                for delta in range(deltas):
+                    cand_bounds[r, q, t-delay, delta] = np.abs(np.dot(residual[r, :, t-delay], l_bound[:, q, delta]))
+                    cand_bounds[r, q, t-delay, delta] += np.dot(noise_vector, np.abs(l_bound[:, q, delta]))
 
     else:
         theta_poly[:, :, t] = 0.0
@@ -225,7 +233,10 @@ for q in range(d):
         global_bounds *= np.max(l_bound[:, q])
         global_bounds[r, q] += (M[r]/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
         comb = np.math.factorial(d)//(np.math.factorial(d-q+1)*np.math.factorial(max(0, q-1)))
-        bounds[r, q, :] += M[r]*comb*((delta*sampling_dt)**(d-q+1))
+        for delta in range(1, deltas+1):
+            cand_bounds[r, q, :, delta-1] += M[r]*comb*((delta*sampling_dt)**(d-q+1))
+
+bounds = np.min(cand_bounds, axis=-1)
 
 for t in range(N-1-delay, num_sampling_steps):
     xhat_upper[0, t] = xhat_poly[0, t] + bounds[0, 0, t]

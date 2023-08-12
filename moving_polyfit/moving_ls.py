@@ -67,7 +67,7 @@ class MultiDimPolyEstimator:
         # compute and save the fit residuals
         for i in range(self.N):
             for q in range(self.p):
-                self.residuals[q, i] = self.polynomials[q](t[i]) - y[q, i]
+                self.residuals[q, i] = y[q, i] - self.polynomials[q](t[i])
 
         self.coefs = np.array([poly.coef for poly in self.polynomials])
 
