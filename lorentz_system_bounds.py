@@ -92,7 +92,7 @@ for delta in range(1, deltas+1):
         for q in range(d):
             l_bound[l_indices[i], q, delta-1] = l_i.deriv(q)(eval_time)  # coefficient for i-th residual in bound
             if verbose_lagrange:
-                print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q, delta-1]}')  # for an idea of the scale of each term
+                print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q, delta-1]}')
 
 
 poly_estimator = PolyEstimator(d, N, sampling_dt)
@@ -241,7 +241,7 @@ for i, ax in enumerate(axs.ravel()):
     ax.set_xlabel('time (s)')
     ax.set_ylabel(f'x[{i+1}](t)')
     ax.legend()
-    if i==2:
+    if i == 2:
         ax.set_ylim([-175, 175])
     ax.grid()
 f4.suptitle('State estimates')
@@ -266,24 +266,42 @@ f5.suptitle('Derivative estimates')
 f5.tight_layout()
 f5.savefig(dest+'derivative_est.pdf', bbox_inches='tight', pad_inches=0.05)
 
-f6, axs3 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
-                        figsize=(5*min(4, d), 5))
-for i, ax in enumerate(axs3.ravel()):
-    ax.semilogy(sampling_time[S:E], np.abs(yhat_poly[i, S:E]-y_derivs_samples[i, S:E]), linewidth=2.0,
-                c='blue', label='Polynomial error')
-    ax.fill_between(sampling_time[S:E], np.zeros_like(sampling_time[S:E]), bounds[i, S:E],
-                    alpha=0.5, zorder=-1)
-    ax.semilogy(sampling_time[S:E], np.ones_like(sampling_time[S:E])*global_bounds[i], linewidth=2.0,
-                c='black', label='Offline bound (Taylor)')
-    ax.plot(sampling_time[S:E], bounds[i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Online bound')
+f6, axs3 = plt.subplots(nrows=2, ncols=3,
+                        figsize=(5*3, 5), sharex=True)
+f6.subplots_adjust(hspace=0.01)
+
+for i in range(3):
+    axs3[1, i].plot(sampling_time[S:E], np.abs(yhat_poly[i, S:E]-y_derivs_samples[i, S:E]), linewidth=2.0,
+                    c='blue', label='Polynomial error')
+    axs3[1, i].fill_between(sampling_time[S:E], np.zeros_like(sampling_time[S:E]), bounds[i, S:E],
+                            alpha=0.5, zorder=-1)
+    axs3[0, i].plot(sampling_time[S:E], np.ones_like(sampling_time[S:E])*global_bounds[i], linewidth=2.0,
+                    c='black', label='Offline bound (Taylor)')
+    axs3[1, i].plot(sampling_time[S:E], bounds[i, S:E],
+                    linewidth=2.0, c='red', linestyle='dashed', label='Online bound')
     # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     # if i == 1:
     #     ax.semilogy(sampling_time[S:E], np.ones_like(sampling_time[S:E])*old_bound, linewidth=2.0,
     #                 c='gray', label='Offline bound (previous)')
-    ax.set_xlabel('time (s)')
-    ax.set_ylabel('y'+"'"*i + '(t) error')
-    ax.legend()
-    ax.grid()
+    axs3[1, i].set_xlabel('time (s)')
+    axs3[1, i].set_ylabel('y'+"'"*i + '(t) error')
+    axs3[1, i].legend()
+    axs3[0, i].legend()
+    axs3[1, i].grid()
+    axs3[0, i].grid()
+    axs3[0, i].spines.bottom.set_visible(False)
+    axs3[1, i].spines.top.set_visible(False)
+    axs3[0, i].xaxis.tick_top()
+    axs3[0, i].tick_params(labeltop=False)
+    axs3[1, i].xaxis.tick_bottom()
+    axs3[1, i].set_ylim(-0.1*np.max(bounds[i, S:E]), 1.1*np.max(bounds[i, S:E]))
+    axs3[0, i].set_ylim(0.9*global_bounds[i], 1.1*global_bounds[i])
+
+    prop = .5  # proportion of vertical to horizontal extent of the slanted line
+    slantargs = dict(marker=[(-1, -prop), (1, prop)], markersize=12,
+                     linestyle="none", color='k', mec='k', mew=1, clip_on=False)
+    axs3[0, i].plot([0, 1], [0, 0], transform=axs3[0, i].transAxes, **slantargs)
+    axs3[1, i].plot([0, 1], [1, 1], transform=axs3[1, i].transAxes, **slantargs)
 f6.suptitle('Derivative estimation errors')
 f6.tight_layout()
 f6.savefig(dest+'derivative_error.pdf', bbox_inches='tight', pad_inches=0.05)

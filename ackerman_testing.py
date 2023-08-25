@@ -33,6 +33,8 @@ m = ODE.m  # control input dimension
 p = ODE.p  # output dimension
 uderivs = ODE.uderivs  # number of control input derivatives we need to provide
 
+print(f'Noise in interval : [{total_time/3.0:.2f}, {total_time*2.0/3.0:.2f}]')
+
 
 def noise_generator(t: float, mag: float, p: int) -> np.ndarray:
     if total_time/3.0 < t and t < 2*total_time/3:
@@ -292,6 +294,8 @@ size = (5*gridcols, 5)
 S = N
 E = num_sampling_steps-delay
 
+dest = './tmp/ackerman_'
+
 f4, axs = plt.subplots(nrows=2, ncols=3, figsize=size)
 for i in range(n):
     ax = axs.ravel()[i]
@@ -311,6 +315,7 @@ lines_labels = [f4.axes[0].get_legend_handles_labels()]
 lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
 f4.axes[-1].legend(lines, labels, loc="center")
 f4.tight_layout()
+f4.savefig(dest+'state_estimation.pdf', bbox_inches='tight', pad_inches=0.05)
 
 for q in range(p):
     f5, axs2 = plt.subplots(nrows=gridrows, ncols=gridcols,
@@ -327,8 +332,9 @@ for q in range(p):
         ax.set_ylabel(f'y_[{q+1}]'+"'"*i+'(t)')
         ax.legend()
         ax.grid()
-    f5.suptitle(f'y[{q}] Derivative estimation')
+    f5.suptitle(f'y[{q+1}] Derivative estimation')
     f5.tight_layout()
+    f5.savefig(dest+f'y_{q+1}_derivative_est.pdf', bbox_inches='tight', pad_inches=0.05)
 
     f6, axs3 = plt.subplots(nrows=gridrows, ncols=gridcols,
                             figsize=size)
@@ -346,8 +352,9 @@ for q in range(p):
         ax.set_ylabel(f'y[{q+1}]'+"'"*i+'(t) error')
         ax.legend()
         ax.grid()
-    f6.suptitle(f'y[{q}] Derivative estimation errors')
+    f6.suptitle(f'y[{q+1}] Derivative estimation errors')
     f6.tight_layout()
+    f6.savefig(dest+f'y_{q+1}_derivative_errors.pdf', bbox_inches='tight', pad_inches=0.05)
 
 
 plt.show()
