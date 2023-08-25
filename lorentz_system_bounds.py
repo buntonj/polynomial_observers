@@ -5,6 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial as P
 
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+
 np.random.seed(0)
 verbose = False
 ##############################################################
@@ -187,6 +190,7 @@ for t in range(1, num_sampling_steps):
         print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
 
 M = np.max(np.abs(y_derivs[min(ODE.nderivs-1, d), :]))
+print(f'Derivative bound: {M:.2f}')
 global_bounds = np.empty((d,))
 for q in range(d):
     global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q, -1])
@@ -239,7 +243,7 @@ for i, ax in enumerate(axs.ravel()):
     ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
     ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Estimator')
     ax.set_xlabel('time (s)')
-    ax.set_ylabel(f'x[{i+1}](t)')
+    ax.set_ylabel(f'$x_{i+1}(t)$')
     ax.legend()
     if i == 2:
         ax.set_ylim([-175, 175])

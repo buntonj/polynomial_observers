@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 from numpy.polynomial import Polynomial as P
 import pickle
 
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+
 np.random.seed(0)
 verbose = False
 ##############################################################
@@ -305,7 +308,7 @@ for i in range(n):
             linestyle='dashed', label='Polynomial estimate')
     ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
     ax.set_xlabel('time (s)')
-    ax.set_ylabel(f'x[{i+1}](t)')
+    ax.set_ylabel(f'$x_{i+1}(t)$')
     # ax.legend()
     ax.grid()
 
@@ -329,10 +332,10 @@ for q in range(p):
                 linestyle='dashed', label='Polynomial estimate')
         ax.plot(integration_time, y_derivs[q, i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y_[{q+1}]'+"'"*i+'(t)')
+        ax.set_ylabel(f'$y_{q+1}'+"'"*i+'(t)$')
         ax.legend()
         ax.grid()
-    f5.suptitle(f'y[{q+1}] Derivative estimation')
+    f5.suptitle(f'$y_{q+1}$ Derivative estimation')
     f5.tight_layout()
     f5.savefig(dest+f'y_{q+1}_derivative_est.pdf', bbox_inches='tight', pad_inches=0.05)
 
@@ -349,10 +352,10 @@ for q in range(p):
                 c='red', linestyle='dashed', label='Online bound')
         # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
         ax.set_xlabel('time (s)')
-        ax.set_ylabel(f'y[{q+1}]'+"'"*i+'(t) error')
+        ax.set_ylabel(f'$y_{q+1}'+"'"*i+'(t) error$')
         ax.legend()
         ax.grid()
-    f6.suptitle(f'y[{q+1}] Derivative estimation errors')
+    f6.suptitle(f'$y_{q+1}$ Derivative estimation errors')
     f6.tight_layout()
     f6.savefig(dest+f'y_{q+1}_derivative_errors.pdf', bbox_inches='tight', pad_inches=0.05)
 
