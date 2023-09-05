@@ -132,7 +132,7 @@ integration_time = np.zeros((num_integration_steps,))
 sampling_time = np.zeros((num_sampling_steps,))
 
 # initializing the ODE
-x0 = 10.0*(np.random.rand(n)-0.5)
+x0 = (np.random.rand(n)-0.5)
 x[:, 0] = x0
 x_samples[:, 0] = x0
 sys = ContinuousTimeSystem(ODE, x0=x0, dt=integration_dt, solver='RK45')
@@ -236,21 +236,23 @@ plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
 dest = './tmp/lorentz_'
 
-f4, axs = plt.subplots(nrows=n//4+1, ncols=min(4, n), figsize=(5*min(4, n), 5))
+f4, axs = plt.subplots(nrows=3, ncols=1, figsize=(6, 4), sharex=True)
 for i, ax in enumerate(axs.ravel()):
-    ax.scatter(sampling_time, x_samples[i, :], s=20, marker='x', c='blue', label='samples')
+    ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='True state')
     ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
     ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Estimator')
-    ax.set_xlabel('time (s)')
+    # ax.set_xlabel('time (s)')
     ax.set_ylabel(f'$x_{i+1}(t)$')
-    ax.legend()
+    # ax.legend()
     if i == 2:
         ax.set_ylim([-175, 175])
     ax.grid()
+axs[0].legend()
+axs[-1].set_xlabel('time (s)')
 f4.suptitle('State estimates')
 f4.tight_layout()
-f4.savefig(dest+'state_est.pdf', bbox_inches='tight', pad_inches=0.05)
+f4.savefig(dest+'state_est_tall.pdf', bbox_inches='tight', pad_inches=0.05)
 
 f5, axs2 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
                         figsize=(5*min(4, d), 5))
@@ -270,45 +272,49 @@ f5.suptitle('Derivative estimates')
 f5.tight_layout()
 f5.savefig(dest+'derivative_est.pdf', bbox_inches='tight', pad_inches=0.05)
 
-f6, axs3 = plt.subplots(nrows=2, ncols=3,
-                        figsize=(5*3, 5), sharex=True)
-f6.subplots_adjust(hspace=0.01)
+f6, axs3 = plt.subplots(nrows=9, ncols=1,
+                        figsize=(6, 8), sharex=True, height_ratios=[0.65, 1, 0.02, 0.65, 1, 0.02, 0.65, 1, 0.0])
+f6.subplots_adjust(hspace=0.2)
 
 for i in range(3):
-    axs3[1, i].plot(sampling_time[S:E], np.abs(yhat_poly[i, S:E]-y_derivs_samples[i, S:E]), linewidth=2.0,
+    axs3[3*i + 2].set_visible(False)
+    axs3[3*i + 1].plot(sampling_time[S:E], np.abs(yhat_poly[i, S:E]-y_derivs_samples[i, S:E]), linewidth=2.0,
                     c='blue', label='Polynomial error')
-    axs3[1, i].fill_between(sampling_time[S:E], np.zeros_like(sampling_time[S:E]), bounds[i, S:E],
+    axs3[3*i+1].fill_between(sampling_time[S:E], np.zeros_like(sampling_time[S:E]), bounds[i, S:E],
                             alpha=0.5, zorder=-1)
-    axs3[0, i].plot(sampling_time[S:E], np.ones_like(sampling_time[S:E])*global_bounds[i], linewidth=2.0,
+    axs3[3*i].plot(sampling_time[S:E], np.ones_like(sampling_time[S:E])*global_bounds[i], linewidth=2.0,
                     c='black', label='Offline bound (Taylor)')
-    axs3[1, i].plot(sampling_time[S:E], bounds[i, S:E],
+    axs3[3*i+1].plot(sampling_time[S:E], bounds[i, S:E],
                     linewidth=2.0, c='red', linestyle='dashed', label='Online bound')
     # ax.plot(integration_time, y_derivs[i, :], linewidth=2.0, c='blue', label='truth')
     # if i == 1:
     #     ax.semilogy(sampling_time[S:E], np.ones_like(sampling_time[S:E])*old_bound, linewidth=2.0,
     #                 c='gray', label='Offline bound (previous)')
-    axs3[1, i].set_xlabel('time (s)')
-    axs3[1, i].set_ylabel('y'+"'"*i + '(t) error')
-    axs3[1, i].legend()
-    axs3[0, i].legend()
-    axs3[1, i].grid()
-    axs3[0, i].grid()
-    axs3[0, i].spines.bottom.set_visible(False)
-    axs3[1, i].spines.top.set_visible(False)
-    axs3[0, i].xaxis.tick_top()
-    axs3[0, i].tick_params(labeltop=False)
-    axs3[1, i].xaxis.tick_bottom()
-    axs3[1, i].set_ylim(-0.1*np.max(bounds[i, S:E]), 1.1*np.max(bounds[i, S:E]))
-    axs3[0, i].set_ylim(0.9*global_bounds[i], 1.1*global_bounds[i])
+    # axs3[2*i+1].set_xlabel('time (s)')
+    axs3[3*i+1].set_ylabel('y'+"'"*i + '(t) error')
+    # axs3[2*i+1].legend()
+    # axs3[2*i].legend()
+    axs3[1+3*i].grid()
+    axs3[3*i].grid()
+    axs3[3*i].spines.bottom.set_visible(False)
+    axs3[1+3*i].spines.top.set_visible(False)
+    axs3[3*i].xaxis.tick_top()
+    axs3[3*i].tick_params(labeltop=False)
+    axs3[3*i+1].xaxis.tick_bottom()
+    axs3[1+3*i].set_ylim(-0.1*np.max(bounds[i, S:E]), 1.1*np.max(bounds[i, S:E]))
+    axs3[3*i].set_ylim(0.9*global_bounds[i], 1.1*global_bounds[i])
 
-    prop = .5  # proportion of vertical to horizontal extent of the slanted line
+    prop = .05  # proportion of vertical to horizontal extent of the slanted line
     slantargs = dict(marker=[(-1, -prop), (1, prop)], markersize=12,
                      linestyle="none", color='k', mec='k', mew=1, clip_on=False)
-    axs3[0, i].plot([0, 1], [0, 0], transform=axs3[0, i].transAxes, **slantargs)
-    axs3[1, i].plot([0, 1], [1, 1], transform=axs3[1, i].transAxes, **slantargs)
-f6.suptitle('Derivative estimation errors')
-f6.tight_layout()
-f6.savefig(dest+'derivative_error.pdf', bbox_inches='tight', pad_inches=0.05)
+    axs3[3*i].plot([0, 1], [0, 0], transform=axs3[3*i].transAxes, **slantargs)
+    axs3[1+3*i].plot([0, 1], [1, 1], transform=axs3[1+3*i].transAxes, **slantargs)
+axs3[1].legend()
+axs3[0].legend()
+axs3[-2].set_xlabel('time (s)')
+axs3[0].set_title('Derivative estimation errors')
+# f6.tight_layout()
+f6.savefig(dest+'derivative_error_tall.pdf', bbox_inches='tight', pad_inches=0.05)
 
 f7, axs4 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
                         figsize=(5*min(4, d), 5))

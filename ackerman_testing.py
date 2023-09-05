@@ -299,7 +299,7 @@ E = num_sampling_steps-delay
 
 dest = './tmp/ackerman_'
 
-f4, axs = plt.subplots(nrows=2, ncols=3, figsize=size)
+f4, axs = plt.subplots(nrows=3, ncols=2, figsize=(15,10))
 for i in range(n):
     ax = axs.ravel()[i]
     ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
@@ -316,9 +316,9 @@ f4.axes[-1].set_axis_off()
 f4.suptitle('State estimation')
 lines_labels = [f4.axes[0].get_legend_handles_labels()]
 lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
-f4.axes[-1].legend(lines, labels, loc="center")
+f4.axes[-1].legend(lines, labels, loc="center", fontsize='xx-large')
 f4.tight_layout()
-f4.savefig(dest+'state_estimation.pdf', bbox_inches='tight', pad_inches=0.05)
+f4.savefig(dest+'state_estimation_tall.pdf', bbox_inches='tight', pad_inches=0.05)
 
 for q in range(p):
     f5, axs2 = plt.subplots(nrows=gridrows, ncols=gridcols,
