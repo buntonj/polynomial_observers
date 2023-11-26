@@ -302,8 +302,8 @@ dest = './tmp/ackerman_'
 f4, axs = plt.subplots(nrows=3, ncols=2, figsize=(15,10))
 for i in range(n):
     ax = axs.ravel()[i]
-    ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
-    ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='truth')
+    ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='Samples')
+    ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='True state')
     ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red',
             linestyle='dashed', label='Polynomial estimate')
     ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
