@@ -50,7 +50,12 @@ def control_input(t, y, x=None):
 #                   FITTING PARAMETERS                       #
 ##############################################################
 # currently, we set this to one below the max we can explicitly compute (for bound purposes)
-d = ODE.nderivs-1  # degree of estimation polynomial
+d = 2  # ODE.nderivs-1  # degree of estimation polynomial
+# We will get an error bound for
+# 0th derivative
+# 1st derivative
+# ...
+# dth derivative
 
 # the theory allows us to pick any subset of (at least) d + 1 points containing the evaluation point.
 # we parameterize this by choosing an index jumping size delta
@@ -63,7 +68,7 @@ window_times = np.linspace(0., N*sampling_dt, N, endpoint=False)
 deltas = N//num_t_points
 print(f'Optimizing over delta up to: {deltas}')
 # this vector will be multiplied with the residuals + noise
-l_bound = np.zeros((N, d, deltas))
+l_bound = np.zeros((N, d+1, deltas))
 
 if num_t_points > N/deltas:
     raise ValueError(f"Delta ({deltas}) invalid for window size ({N}). ({N}/{deltas} = {N/deltas} < {num_t_points})")
@@ -92,7 +97,7 @@ for delta in range(1, deltas+1):
                 print(f't = {l_times[j]:.3f}, l_i(t) = {l_i(l_times[j])}')
 
         # for every derivative that we estimate, compute this lagrange polynomial's derivative at the estimation time
-        for q in range(d):
+        for q in range(d+1):
             l_bound[l_indices[i], q, delta-1] = l_i.deriv(q)(eval_time)  # coefficient for i-th residual in bound
             if verbose_lagrange:
                 print(f'|l_{l_indices[i]}^({q})(t)|: {l_bound[l_indices[i], q, delta-1]}')
@@ -110,8 +115,8 @@ y_derivs = np.empty((ODE.nderivs, num_integration_steps))
 
 # setting up arrays for errors and bounds in estimation
 residual = np.empty((N, num_sampling_steps))
-bounds = np.zeros((d, num_sampling_steps))
-cand_bounds = np.zeros((d, num_sampling_steps, deltas))
+bounds = np.zeros((d+1, num_sampling_steps))
+cand_bounds = np.zeros((d+1, num_sampling_steps, deltas))
 
 # setting up arrays for variables at sampling instants (could be done with index splicing)
 y_samples = np.empty((p, num_sampling_steps))
@@ -175,7 +180,7 @@ for t in range(1, num_sampling_steps):
         # compute a bound on derivative estimation error from residuals
         noise_vector = np.ones(N,)*noise_mag
         # noise_vector = np.abs(noise_samples[:, t-N+1:t+1])
-        for q in range(d):
+        for q in range(d+1):
             for delta in range(deltas):
                 cand_bounds[q, t-delay, delta] = np.abs(np.dot(residual[:, t-delay], l_bound[:, q, delta]))
                 cand_bounds[q, t-delay, delta] += np.dot(noise_vector, np.abs(l_bound[:, q, delta]))
@@ -189,10 +194,10 @@ for t in range(1, num_sampling_steps):
     if verbose:
         print(f'Completed timestep {t}, t = {sys.t:.1e}, state = {sys.x}')
 
-M = np.max(np.abs(y_derivs[min(ODE.nderivs-1, d), :]))
-print(f'Derivative bound: {M:.2f}')
-global_bounds = np.empty((d,))
-for q in range(d):
+M = np.max(np.abs(y_derivs[d+1, :]))
+print(f'{d+1}th derivative bound: {M:.2f}')
+global_bounds = np.empty((d+1,))
+for q in range(d+1):
     global_bounds[q] = (M/(np.math.factorial(d+1)))*(np.sqrt(N**2+N))*((N*sampling_dt)**(d+1))*np.max(l_bound[:, q, -1])
     global_bounds[q] += np.linalg.norm(noise_vector, 1)*np.max(l_bound[:, q, -1])
     global_bounds[q] += (M/(np.math.factorial(d-q+1)))*(((q+1)*sampling_dt)**(d-q+1))
@@ -236,7 +241,25 @@ plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
 dest = './tmp/lorentz_'
 
-f4, axs = plt.subplots(nrows=3, ncols=1, figsize=(6, 4), sharex=True)
+f3, axs = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+for i, ax in enumerate(axs.ravel()):
+    ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
+    ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='True state')
+    ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
+    ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red', linestyle='dashed', label='Estimator')
+    # ax.set_xlabel('time (s)')
+    ax.set_ylabel(f'$x_{i+1}(t)$',fontsize=13)
+    # ax.legend()
+    if i == 2:
+        ax.set_ylim([-250, 250])
+    ax.grid()
+    ax.set_xlabel('Time (s)', fontsize=13)
+axs[0].legend()
+f3.suptitle('State estimates', fontsize=20)
+f3.tight_layout()
+f3.savefig(dest+'state_est.pdf', bbox_inches='tight', pad_inches=0.05)
+
+f4, axs = plt.subplots(nrows=3, ncols=1, figsize=(6, 8), sharex=True)
 for i, ax in enumerate(axs.ravel()):
     ax.scatter(sampling_time, x_samples[i, :], s=10, marker='x', c='blue', label='samples')
     ax.plot(integration_time, x[i, :], linewidth=2.0, c='blue', label='True state')
@@ -246,16 +269,17 @@ for i, ax in enumerate(axs.ravel()):
     ax.set_ylabel(f'$x_{i+1}(t)$')
     # ax.legend()
     if i == 2:
-        ax.set_ylim([-175, 175])
+        ax.set_ylim([-250, 250])
     ax.grid()
 axs[0].legend()
 axs[-1].set_xlabel('time (s)')
-f4.suptitle('State estimates')
+axs[0].set_title('State estimates')
+#f4.suptitle('State estimates')
 f4.tight_layout()
 f4.savefig(dest+'state_est_tall.pdf', bbox_inches='tight', pad_inches=0.05)
 
-f5, axs2 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
-                        figsize=(5*min(4, d), 5))
+f5, axs2 = plt.subplots(nrows=1, ncols=d+1,
+                        figsize=(5*(d+1), 5))
 for i, ax in enumerate(axs2.ravel()):
     ax.fill_between(sampling_time[S:E], yhat_poly[i, S:E]-bounds[i, S:E], yhat_poly[i, S:E]+bounds[i, S:E],
                     color='red', alpha=0.5, zorder=-1)
@@ -309,15 +333,15 @@ for i in range(3):
                      linestyle="none", color='k', mec='k', mew=1, clip_on=False)
     axs3[3*i].plot([0, 1], [0, 0], transform=axs3[3*i].transAxes, **slantargs)
     axs3[1+3*i].plot([0, 1], [1, 1], transform=axs3[1+3*i].transAxes, **slantargs)
-axs3[1].legend()
-axs3[0].legend()
+axs3[1].legend(loc='upper right')
+axs3[0].legend(loc='upper right')
 axs3[-2].set_xlabel('time (s)')
 axs3[0].set_title('Derivative estimation errors')
 # f6.tight_layout()
 f6.savefig(dest+'derivative_error_tall.pdf', bbox_inches='tight', pad_inches=0.05)
 
-f7, axs4 = plt.subplots(nrows=d//4+1, ncols=min(4, d),
-                        figsize=(5*min(4, d), 5))
+f7, axs4 = plt.subplots(nrows=1, ncols=3,
+                        figsize=(5*3, 5))
 for i, ax in enumerate(axs4.ravel()):
     ax.plot(sampling_time[S:E], np.abs(xhat_poly[i, S:E]-x_samples[i, S:E]), linewidth=2.0,
             c='blue', label='Estimator error')

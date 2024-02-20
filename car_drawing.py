@@ -4,7 +4,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Polygon, Wedge
 from matplotlib.collections import PatchCollection
-from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 
 # OPENING UP THE DATA FROM THE LAST RUN
 save_file = './tmp/last_run.p'
@@ -250,7 +250,7 @@ def update(i):
 
     heading_bound.set_theta1(min(thetas))
     heading_bound.set_theta2(max(thetas))
-    pos_bound.set_xy((xhat[0, i], xhat[1, i]))
+    pos_bound.set_xy((xhat[0, i]-np.abs(xhat_upper[0, i]-xhat_lower[0, i])/2.0, xhat[1, i]-np.abs(xhat_upper[1, i]-xhat_lower[1, i])/2.0))
     pos_bound.set_width(np.abs(xhat_upper[0, i]-xhat_lower[0, i]))
     pos_bound.set_height(np.abs(xhat_upper[1, i]-xhat_lower[1, i]))
     vax.set_title(f'Frame {i}')
@@ -273,5 +273,6 @@ anim_params = {'repeat': True,
                'blit': False,
                'frames': np.arange(window_len-delay, num_steps-delay)}
 anim = FuncAnimation(vfig, update, **anim_params)
-anim.save('car_test.gif', dpi=300, writer=PillowWriter(fps=int(1./dt)))
+# anim.save('car_test.gif', dpi=300, writer=PillowWriter(fps=int(1./dt)))
+anim.save('car_test.mp4', dpi=300, writer=FFMpegWriter(fps=int(1./(6.0*dt))))
 plt.show()

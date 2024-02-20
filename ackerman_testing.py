@@ -307,13 +307,13 @@ for i in range(n):
     ax.plot(sampling_time[S:E], xhat_poly[i, S:E], linewidth=2.0, c='red',
             linestyle='dashed', label='Polynomial estimate')
     ax.fill_between(sampling_time[S:E], xhat_lower[i, S:E], xhat_upper[i, S:E], color='red', alpha=0.5, zorder=-1)
-    ax.set_xlabel('time (s)')
-    ax.set_ylabel(f'$x_{i+1}(t)$')
+    ax.set_xlabel('time (s)', fontsize=15)
+    ax.set_ylabel(f'$x_{i+1}(t)$', fontsize=15)
     # ax.legend()
     ax.grid()
 
 f4.axes[-1].set_axis_off()
-f4.suptitle('State estimation')
+f4.suptitle('State estimation',fontsize=24)
 lines_labels = [f4.axes[0].get_legend_handles_labels()]
 lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
 f4.axes[-1].legend(lines, labels, loc="center", fontsize='xx-large')
