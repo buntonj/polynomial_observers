@@ -19,7 +19,7 @@ Our theory shows that the polynomial fitting residuals (the quantities $y(t) - \
 
 In a single picture, the error bounds we get look more like this, for a basic bicycle/Ackerman steering model:
 
-[ackerman_example](https://github.com/buntonj/polynomial_observers/blob/main/car_test.mp4)
+![ackerman_example](https://github.com/buntonj/polynomial_observers/blob/main/car_test.mp4)
 
 Here we are estimating the vehicle's position ($x$ and $y$ coordinates), orientation (angle from horizontal, $\theta$), linear velocity magnitude, and steering angle (from straight) from noisy "GPS-style" measurements of just $x-y$ coordinates.  From this output, the steering angle requires computing two derivatives, and is thus the most impacted by noise, but is easier to estimate when the car has high centripetal acceleration (which we see in the error bounds).
 
